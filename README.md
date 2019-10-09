@@ -25,7 +25,7 @@ Download and install lambdaUSB:
 1. Instantiate the USB device:
 
 ```python
-m.submodules.ulpi_phy = ulpi_phy = ULPIPhy(platform.request("ulpi", 0), domain="ulpi")
+m.submodules.ulpi_phy = ulpi_phy = ULPIPhy(platform.request("ulpi", 0))
 m.submodules.usb_dev  = usb_dev  = UsbDevice(ulpi_phy)
 ```
 

@@ -7,9 +7,8 @@ __all__ = ["ULPIPhy"]
 
 
 class ULPIPhy(Elaboratable):
-    def __init__(self, pads, domain="ulpi"):
+    def __init__(self, pads):
         self.pads = pads
-        self.domain = domain
 
         self.sink = stream.Endpoint([("data", 8)])
         self.source = stream.Endpoint([("data", 8)])
@@ -20,12 +19,12 @@ class ULPIPhy(Elaboratable):
         cd_ulpi = m.domains.cd_ulpi = ClockDomain("ulpi", local=True)
         m.d.comb += cd_ulpi.clk.eq(self.pads.clk.i)
 
-        ctl = m.submodules.ctl = DomainRenamer(self.domain)(ULPIDeviceController(self.pads))
+        ctl = m.submodules.ctl = DomainRenamer("ulpi")(ULPIDeviceController(self.pads))
 
-        rx_fifo = stream.AsyncFIFO([("data", 8)], 128, w_domain=self.domain, r_domain="sync")
+        rx_fifo = stream.AsyncFIFO([("data", 8)], 128, w_domain="ulpi", r_domain="sync")
         m.submodules.rx_fifo = rx_fifo
 
-        tx_fifo = stream.AsyncFIFO([("data", 8)], 128, w_domain="sync", r_domain=self.domain)
+        tx_fifo = stream.AsyncFIFO([("data", 8)], 128, w_domain="sync", r_domain="ulpi")
         m.submodules.tx_fifo = tx_fifo
 
         m.d.comb += [

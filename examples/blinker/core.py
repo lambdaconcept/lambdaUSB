@@ -44,7 +44,7 @@ class UsbBlinker(Elaboratable):
         m = Module()
 
         # USB device
-        ulpi_phy  = m.submodules.ulpi_phy = ULPIPhy(platform.request("ulpi", 0), domain="ulpi")
+        ulpi_phy  = m.submodules.ulpi_phy = ULPIPhy(platform.request("ulpi", 0))
         usb_dev   = m.submodules.usb_dev  = UsbDevice(ulpi_phy)
 
         # Configuration endpoint
