@@ -3,11 +3,42 @@ from nmigen import *
 from ..lib import stream
 
 
-__all__ = ["ULPIPhyS7", "ULPISplitter", "ULPISender", "ULPITimer", "ULPIDeviceController", "ULPIPhyWrapper"]
+__all__ = ["ULPIPhy"]
+
+
+class ULPIPhy(Elaboratable):
+    def __init__(self, pads, domain="ulpi"):
+        self.pads = pads
+        self.domain = domain
+
+        self.sink = stream.Endpoint([("data", 8)])
+        self.source = stream.Endpoint([("data", 8)])
+
+    def elaborate(self, platform):
+        m = Module()
+
+        cd_ulpi = m.domains.cd_ulpi = ClockDomain("ulpi", local=True)
+        m.d.comb += cd_ulpi.clk.eq(self.pads.clk.i)
+
+        ctl = m.submodules.ctl = DomainRenamer(self.domain)(ULPIDeviceController(self.pads))
+
+        rx_fifo = stream.AsyncFIFO([("data", 8)], 128, w_domain=self.domain, r_domain="sync")
+        m.submodules.rx_fifo = rx_fifo
+
+        tx_fifo = stream.AsyncFIFO([("data", 8)], 128, w_domain="sync", r_domain=self.domain)
+        m.submodules.tx_fifo = tx_fifo
+
+        m.d.comb += [
+            ctl.source.connect(rx_fifo.sink),
+            rx_fifo.source.connect(self.source),
+            self.sink.connect(tx_fifo.sink),
+            tx_fifo.source.connect(ctl.sink)
+        ]
+
+        return m
 
 
 class ULPIPhyS7(Elaboratable):
-    # assuming 60MHz sys_clk
     def __init__(self, pads):
         self.sink   = stream.Endpoint([('data', 8)])
         self.source = stream.Endpoint([('data', 8), ('cmd', 1)])
@@ -322,34 +353,5 @@ class ULPIDeviceController(Elaboratable):
                 with m.If(phy.sink.ready):
                     m.d.sync += is_hs.eq(1)
                     m.next = "IDLE"
-
-        return m
-
-
-class ULPIPhyWrapper(Elaboratable):
-    def __init__(self, pads, domain="ulpi"):
-        self.pads = pads
-        self.domain = domain
-
-        self.sink = stream.Endpoint([("data", 8)])
-        self.source = stream.Endpoint([("data", 8)])
-
-    def elaborate(self, platform):
-        m = Module()
-
-        ctl = m.submodules.ctl = DomainRenamer(self.domain)(ULPIDeviceController(self.pads))
-
-        rx_fifo = stream.AsyncFIFO([("data", 8)], 128, w_domain=self.domain, r_domain="sync")
-        m.submodules.rx_fifo = rx_fifo
-
-        tx_fifo = stream.AsyncFIFO([("data", 8)], 128, w_domain="sync", r_domain=self.domain)
-        m.submodules.tx_fifo = tx_fifo
-
-        m.d.comb += [
-            ctl.source.connect(rx_fifo.sink),
-            rx_fifo.source.connect(self.source),
-            self.sink.connect(tx_fifo.sink),
-            tx_fifo.source.connect(ctl.sink)
-        ]
 
         return m
