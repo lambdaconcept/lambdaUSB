@@ -15,15 +15,15 @@ __all__ = ["UsbDevice"]
 class UsbDevice(Elaboratable):
     def __init__(self, phy):
         self.phy        = phy
-        self._write_map = OrderedDict()
-        self._read_map  = OrderedDict()
+        self._input_map = OrderedDict()
+        self._output_map  = OrderedDict()
 
-    def write_port(self, ep_addr, max_size, xfer_type):
+    def input_port(self, ep_addr, max_size, xfer_type):
         if not isinstance(ep_addr, int) or not ep_addr in range(0, 16):
             raise TypeError("Endpoint address must be an integer in [0..16), not '{!r}'"
                             .format(ep_addr))
-        if ep_addr in self._write_map:
-            raise ValueError("A write port for endpoint {} has already been requested"
+        if ep_addr in self._input_map:
+            raise ValueError("An input port for endpoint {} has already been requested"
                              .format(ep_addr))
         if not isinstance(max_size, int) or not max_size in range(0, 513):
             raise TypeError("Maximum packet size must be an integer in [0..512], not '{!r}'"
@@ -36,15 +36,15 @@ class UsbDevice(Elaboratable):
             port = stream.Endpoint([("empty", 1), ("data", 8)])
         else:
             port = stream.Endpoint([("data", 8)])
-        self._write_map[ep_addr] = port, max_size, xfer_type
+        self._input_map[ep_addr] = port, max_size, xfer_type
         return port
 
-    def read_port(self, ep_addr, max_size, xfer_type):
+    def output_port(self, ep_addr, max_size, xfer_type):
         if not isinstance(ep_addr, int) or not ep_addr in range(0, 16):
             raise TypeError("Endpoint address must be an integer in [0..16), not '{!r}'"
                             .format(ep_addr))
-        if ep_addr in self._read_map:
-            raise ValueError("A read port for endpoint {} has already been requested"
+        if ep_addr in self._output_map:
+            raise ValueError("An output port for endpoint {} has already been requested"
                              .format(ep_addr))
         if not isinstance(max_size, int) or not max_size in range(0, 513):
             raise TypeError("Maximum packet size must be an integer in [0..512], not '{!r}'"
@@ -57,17 +57,17 @@ class UsbDevice(Elaboratable):
             port = stream.Endpoint([("setup", 1), ("data", 8)])
         else:
             port = stream.Endpoint([("data", 8)])
-        self._read_map[ep_addr] = port, max_size, xfer_type
+        self._output_map[ep_addr] = port, max_size, xfer_type
         return port
 
     def elaborate(self, platform):
         m = Module()
 
         controller = m.submodules.controller = UsbController(self.phy)
-        i_arbiter  = m.submodules.i_arbiter  = UsbInputArbiter(self._write_map)
-        i_buffer   = m.submodules.i_buffer   = UsbInputBuffer(self._write_map)
-        o_arbiter  = m.submodules.o_arbiter  = UsbOutputArbiter(self._read_map)
-        o_buffer   = m.submodules.o_buffer   = UsbOutputBuffer(self._read_map)
+        i_arbiter  = m.submodules.i_arbiter  = UsbInputArbiter(self._input_map)
+        i_buffer   = m.submodules.i_buffer   = UsbInputBuffer(self._input_map)
+        o_arbiter  = m.submodules.o_arbiter  = UsbOutputArbiter(self._output_map)
+        o_buffer   = m.submodules.o_buffer   = UsbOutputBuffer(self._output_map)
 
         m.d.comb += [
             # phy -> controller -> o_buffer -> o_arbiter -> endpoints
