@@ -1,7 +1,7 @@
 from enum import IntEnum
 
 
-__all__ = [ "Transfer", "Packet", "Token", "Data", "Handshake", "Special", "pid_from" ]
+__all__ = [ "Transfer", "Packet", "Token", "Data", "Handshake", "Special", "pid_from", "LineState"]
 
 
 class Transfer(IntEnum):
@@ -49,3 +49,10 @@ class Special(IntEnum):
 def pid_from(pkt, val):
     v1 = (val << 2) | pkt
     return ((v1 ^ 0xf) << 4) | v1
+
+
+class LineState(IntEnum):
+    SE0 = 0b00
+    J   = 0b01
+    K   = 0b10
+    SE1 = 0b11
