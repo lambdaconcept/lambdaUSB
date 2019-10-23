@@ -1,5 +1,5 @@
 from nmigen import *
-from nmigen.tools import bits_for, log2_int
+from nmigen.utils import bits_for, log2_int
 
 from .lib import stream
 from .protocol import Transfer
@@ -80,6 +80,8 @@ class UsbInputBuffer(Elaboratable):
         data_mem = Memory(width=8, depth=2**len(data_rp_addr))
         data_rp  = m.submodules.data_rp = data_mem.read_port(transparent=False)
         data_wp  = m.submodules.data_wp = data_mem.write_port()
+
+        data_rp.en.reset = 0
 
         m.d.comb += [
             data_rp.addr.eq(data_rp_addr),
@@ -312,6 +314,8 @@ class UsbOutputBuffer(Elaboratable):
         data_mem = Memory(width=8, depth=2**len(data_rp_addr))
         data_rp  = m.submodules.data_rp = data_mem.read_port(transparent=False)
         data_wp  = m.submodules.data_wp = data_mem.write_port()
+
+        data_rp.en.reset = 0
 
         m.d.comb += [
             data_rp.addr.eq(data_rp_addr),
