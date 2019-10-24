@@ -26,7 +26,7 @@ Download and install lambdaUSB:
 
 ```python
 m.submodules.ulpi_phy = ulpi_phy = ULPIPhy(platform.request("ulpi", 0))
-m.submodules.usb_dev  = usb_dev  = UsbDevice(ulpi_phy)
+m.submodules.usb_dev  = usb_dev  = USBDevice(ulpi_phy)
 ```
 
 For the moment, only ULPI transceivers such as the USB3300 are supported.

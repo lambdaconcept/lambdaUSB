@@ -6,9 +6,9 @@ from ..buf import *
 from ..protocol import Transfer
 
 
-class UsbInputBufferTestCase(FHDLTestCase):
+class USBInputBufferTestCase(FHDLTestCase):
     def test_basic(self):
-        dut = UsbInputBuffer({0x0: (None, 512, Transfer.BULK)})
+        dut = USBInputBuffer({0x0: (None, 512, Transfer.BULK)})
         with Simulator(dut) as sim:
             def write_process():
                 yield dut.sink_write.valid.eq(1)
@@ -72,7 +72,7 @@ class UsbInputBufferTestCase(FHDLTestCase):
             sim.run()
 
     def test_zero_length(self):
-        dut = UsbInputBuffer({0x0: (None, 512, Transfer.BULK)})
+        dut = USBInputBuffer({0x0: (None, 512, Transfer.BULK)})
         with Simulator(dut) as sim:
             def write_process():
                 yield dut.sink_write.valid.eq(1)
@@ -126,7 +126,7 @@ class UsbInputBufferTestCase(FHDLTestCase):
             sim.run()
 
     def test_consecutive(self):
-        dut = UsbInputBuffer({0x0: (None, 512, Transfer.BULK)})
+        dut = USBInputBuffer({0x0: (None, 512, Transfer.BULK)})
         with Simulator(dut) as sim:
             def write_process():
                 yield dut.sink_write.valid.eq(1)
@@ -199,7 +199,7 @@ class UsbInputBufferTestCase(FHDLTestCase):
             sim.run()
 
     def test_concurrent(self):
-        dut = UsbInputBuffer({
+        dut = USBInputBuffer({
             0x0: (None, 512, Transfer.BULK),
             0x1: (None, 512, Transfer.BULK)
         })
@@ -301,9 +301,9 @@ class UsbInputBufferTestCase(FHDLTestCase):
             sim.run()
 
 
-class UsbOutputBufferTestCase(FHDLTestCase):
+class USBOutputBufferTestCase(FHDLTestCase):
     def test_basic(self):
-        dut = UsbOutputBuffer({0x0: (None, 512, Transfer.BULK)})
+        dut = USBOutputBuffer({0x0: (None, 512, Transfer.BULK)})
         with Simulator(dut) as sim:
             def write_process():
                 yield dut.sink_write.valid.eq(1)
@@ -368,7 +368,7 @@ class UsbOutputBufferTestCase(FHDLTestCase):
             sim.run()
 
     def test_setup(self):
-        dut = UsbOutputBuffer({0x0: (None, 512, Transfer.BULK)})
+        dut = USBOutputBuffer({0x0: (None, 512, Transfer.BULK)})
         with Simulator(dut) as sim:
             def write_process():
                 yield dut.sink_write.valid.eq(1)
@@ -423,7 +423,7 @@ class UsbOutputBufferTestCase(FHDLTestCase):
             sim.run()
 
     def test_consecutive(self):
-        dut = UsbOutputBuffer({0x0: (None, 512, Transfer.BULK)})
+        dut = USBOutputBuffer({0x0: (None, 512, Transfer.BULK)})
         with Simulator(dut) as sim:
             def write_process():
                 yield dut.sink_write.valid.eq(1)
@@ -495,7 +495,7 @@ class UsbOutputBufferTestCase(FHDLTestCase):
             sim.run()
 
     def test_max_size(self):
-        dut = UsbOutputBuffer({0x0: (None, 32, Transfer.BULK)})
+        dut = USBOutputBuffer({0x0: (None, 32, Transfer.BULK)})
         with Simulator(dut) as sim:
             def write_process():
                 yield dut.sink_write.valid.eq(1)
@@ -546,7 +546,7 @@ class UsbOutputBufferTestCase(FHDLTestCase):
             sim.run()
 
     def test_max_size_with_zlp(self):
-        dut = UsbOutputBuffer({0x0: (None, 32, Transfer.BULK)})
+        dut = USBOutputBuffer({0x0: (None, 32, Transfer.BULK)})
         with Simulator(dut) as sim:
             def write_process():
                 yield dut.sink_write.valid.eq(1)

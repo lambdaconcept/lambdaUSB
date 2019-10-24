@@ -1,7 +1,7 @@
 from nmigen import *
 
 from lambdausb.cfg import ConfigurationEndpoint
-from lambdausb.dev import UsbDevice
+from lambdausb.dev import USBDevice
 from lambdausb.lib import stream
 from lambdausb.phy.ulpi import ULPIPhy
 from lambdausb.protocol import Transfer
@@ -39,13 +39,13 @@ class RgbBlinkerEndpoint(Elaboratable):
         return m
 
 
-class UsbBlinker(Elaboratable):
+class USBBlinker(Elaboratable):
     def elaborate(self, platform):
         m = Module()
 
         # USB device
-        ulpi_phy  = m.submodules.ulpi_phy = ULPIPhy(platform.request("ulpi", 0))
-        usb_dev   = m.submodules.usb_dev  = UsbDevice(ulpi_phy)
+        ulpi_phy = m.submodules.ulpi_phy = ULPIPhy(platform.request("ulpi", 0))
+        usb_dev  = m.submodules.usb_dev  = USBDevice(ulpi_phy)
 
         # Configuration endpoint
         from config import descriptor_map, rom_init
@@ -70,4 +70,4 @@ class UsbBlinker(Elaboratable):
 if __name__ == "__main__":
     from lambdausb.boards.usbsniffer import USBSnifferPlatform
     platform = USBSnifferPlatform()
-    platform.build(UsbBlinker())
+    platform.build(USBBlinker())

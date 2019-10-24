@@ -4,7 +4,7 @@ from .lib import stream
 from .protocol import Transfer
 
 
-__all__ = ["UsbInputArbiter", "UsbOutputArbiter"]
+__all__ = ["USBInputArbiter", "USBOutputArbiter"]
 
 
 class RoundRobin(Elaboratable):
@@ -29,7 +29,7 @@ class RoundRobin(Elaboratable):
         return m
 
 
-class UsbInputArbiter(Elaboratable):
+class USBInputArbiter(Elaboratable):
     def __init__(self, port_map):
         self.port_map     = port_map
         self.source_write = stream.Endpoint([("ep", 4)])
@@ -70,7 +70,7 @@ class UsbInputArbiter(Elaboratable):
         return m
 
 
-class UsbOutputArbiter(Elaboratable):
+class USBOutputArbiter(Elaboratable):
     def __init__(self, port_map):
         self.port_map  = port_map
         self.sink_read = stream.Endpoint([("ep", 4)])

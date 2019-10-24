@@ -3,16 +3,16 @@ from collections import OrderedDict
 from nmigen import *
 
 from .lib import stream
-from .ctl import UsbController
-from .buf import UsbOutputBuffer, UsbInputBuffer
-from .conn import UsbOutputArbiter, UsbInputArbiter
+from .ctl import USBController
+from .buf import USBOutputBuffer, USBInputBuffer
+from .conn import USBOutputArbiter, USBInputArbiter
 from .protocol import Transfer
 
 
-__all__ = ["UsbDevice"]
+__all__ = ["USBDevice"]
 
 
-class UsbDevice(Elaboratable):
+class USBDevice(Elaboratable):
     def __init__(self, phy):
         self.phy        = phy
         self._input_map = OrderedDict()
@@ -63,11 +63,11 @@ class UsbDevice(Elaboratable):
     def elaborate(self, platform):
         m = Module()
 
-        controller = m.submodules.controller = UsbController(self.phy)
-        i_arbiter  = m.submodules.i_arbiter  = UsbInputArbiter(self._input_map)
-        i_buffer   = m.submodules.i_buffer   = UsbInputBuffer(self._input_map)
-        o_arbiter  = m.submodules.o_arbiter  = UsbOutputArbiter(self._output_map)
-        o_buffer   = m.submodules.o_buffer   = UsbOutputBuffer(self._output_map)
+        controller = m.submodules.controller = USBController(self.phy)
+        i_arbiter  = m.submodules.i_arbiter  = USBInputArbiter(self._input_map)
+        i_buffer   = m.submodules.i_buffer   = USBInputBuffer(self._input_map)
+        o_arbiter  = m.submodules.o_arbiter  = USBOutputArbiter(self._output_map)
+        o_buffer   = m.submodules.o_buffer   = USBOutputBuffer(self._output_map)
 
         m.d.comb += [
             # phy -> controller -> o_buffer -> o_arbiter -> endpoints

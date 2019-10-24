@@ -5,10 +5,10 @@ from .lib import stream
 from .protocol import Transfer
 
 
-__all__ = ["UsbInputBuffer", "UsbOutputBuffer"]
+__all__ = ["USBInputBuffer", "USBOutputBuffer"]
 
 
-class UsbInputBuffer(Elaboratable):
+class USBInputBuffer(Elaboratable):
     def __init__(self, endpoint_map):
         self.endpoint_map = endpoint_map
 
@@ -242,7 +242,7 @@ class UsbInputBuffer(Elaboratable):
         return m
 
 
-class UsbOutputBuffer(Elaboratable):
+class USBOutputBuffer(Elaboratable):
     def __init__(self, endpoint_map):
         self.endpoint_map = endpoint_map
 

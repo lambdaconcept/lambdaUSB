@@ -2,14 +2,14 @@ from nmigen import *
 
 from .lib import stream
 from .crc import *
-from .buf import UsbInputBuffer, UsbOutputBuffer
+from .buf import USBInputBuffer, USBOutputBuffer
 from .protocol import *
 
 
-__all__ = ["UsbController"]
+__all__ = ["USBController"]
 
 
-class UsbController(Elaboratable):
+class USBController(Elaboratable):
     def __init__(self, phy):
         self.phy          = phy
 
