@@ -146,7 +146,7 @@ class USBController(Elaboratable):
 
             with m.State("RECEIVE-DATA-2"):
                 rx_valid  = Signal(reset=1)
-                rx_skip   = Signal.range(3, reset=2)
+                rx_skip   = Signal(range(3), reset=2)
                 rx_byte_0 = Signal(8)
                 rx_byte_1 = Signal(8)
                 m.d.comb += self.phy.source.ready.eq(1)

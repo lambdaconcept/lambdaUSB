@@ -31,7 +31,7 @@ class USBInputBuffer(Elaboratable):
                 ep_info[i].xfer_type.eq(Const(xfer_type))
             ]
 
-        rd_index  = Signal.range(len(self.endpoint_map))
+        rd_index  = Signal(range(len(self.endpoint_map)))
         rd_bad_ep = Signal()
 
         with m.Switch(self.source_read.ep):
@@ -94,7 +94,7 @@ class USBInputBuffer(Elaboratable):
         is_full  = Array(Signal(len(self.endpoint_map), name="is_full"))
 
         rd_buf_sel = Signal.like(data_rp_addr.buf_sel)
-        rd_offset  = Signal.range(514)
+        rd_offset  = Signal(range(514))
         rd_buf     = Record(buf_fields)
         rd_done    = Signal()
 
@@ -265,7 +265,7 @@ class USBOutputBuffer(Elaboratable):
                 ep_info[i].xfer_type.eq(Const(xfer_type))
             ]
 
-        rd_index  = Signal.range(len(self.endpoint_map))
+        rd_index  = Signal(range(len(self.endpoint_map)))
         rd_bad_ep = Signal()
 
         with m.Switch(self.source_read.ep):
@@ -329,7 +329,7 @@ class USBOutputBuffer(Elaboratable):
         is_last  = Array(Signal(2, name=f"ep{addr}_last") for addr in self.endpoint_map)
 
         rd_buf_sel = Signal.like(data_rp_addr.buf_sel)
-        rd_offset  = Signal.range(514)
+        rd_offset  = Signal(range(514))
         rd_buf     = Record(buf_fields)
         rd_done    = Signal()
 

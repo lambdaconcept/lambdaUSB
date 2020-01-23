@@ -23,7 +23,7 @@ class RgbBlinkerEndpoint(Elaboratable):
             m.d.sync += sel.eq(self.sink.data[:3])
 
         clk_freq = platform.default_clk_frequency
-        ctr = Signal.range(int(clk_freq//2), reset=int(clk_freq//2)-1)
+        ctr = Signal(range(int(clk_freq//2)), reset=int(clk_freq//2)-1)
         with m.If(ctr == 0):
             m.d.sync += ctr.eq(ctr.reset)
             m.d.sync += led.eq(~led)

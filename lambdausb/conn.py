@@ -12,7 +12,7 @@ class RoundRobin(Elaboratable):
         self.width = width
         self.request = Signal(width)
         self.ce = Signal()
-        self.grant = Signal.range(width)
+        self.grant = Signal(range(width))
 
     def elaborate(self, platform):
         m = Module()

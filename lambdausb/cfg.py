@@ -21,7 +21,7 @@ class ConfigurationEndpoint(Elaboratable):
         m = Module()
 
         rx_buf = Array(Signal(8) for _ in range(8))
-        rx_count = Signal.range(8)
+        rx_count = Signal(range(8))
 
         ctl_type  = Signal(8)
         ctl_req   = Signal(8)
@@ -42,7 +42,7 @@ class ConfigurationEndpoint(Elaboratable):
         rom_rp = m.submodules.rom_rp = rom.read_port(transparent=False)
         rom_rp.en.reset = 0
 
-        req_offset = Signal.range(len(self.rom_init))
+        req_offset = Signal(range(len(self.rom_init)))
         req_size = Signal(16)
 
         with m.Switch(ctl_val1):
