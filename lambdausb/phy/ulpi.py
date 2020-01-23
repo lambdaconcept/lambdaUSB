@@ -16,8 +16,11 @@ class ULPIPhy(Elaboratable):
     def elaborate(self, platform):
         m = Module()
 
-        cd_ulpi = m.domains.cd_ulpi = ClockDomain("ulpi", local=True)
-        m.d.comb += cd_ulpi.clk.eq(self.pads.clk.i)
+        cd_ulpi = m.domains.cd_ulpi = ClockDomain("ulpi", local=False)
+        m.submodules += Instance("BUFG",
+            i_I=self.pads.clk.i,
+            o_O=cd_ulpi.clk
+        )
 
         ctl = m.submodules.ctl = DomainRenamer("ulpi")(ULPIDeviceController(self.pads))
 
@@ -33,6 +36,49 @@ class ULPIPhy(Elaboratable):
             self.sink.connect(tx_fifo.sink),
             tx_fifo.source.connect(ctl.sink)
         ]
+
+        return m
+
+
+class ULPIPhy2(Elaboratable): # TODO rename
+    def __init__(self, pads):
+        self.sink   = stream.Endpoint([('data', 8)])
+        self.source = stream.Endpoint([('data', 8), ('cmd', 1)])
+        self.reset  = Signal()
+        self.pads   = pads
+
+    def elaborate(self, platform):
+        m = Module()
+
+        dir_r = Signal()
+        m.d.sync += dir_r.eq(self.pads.dir.i)
+
+        m.d.comb += self.pads.rst.o.eq(self.reset)
+
+        # Transmit
+        with m.If(~dir_r & ~self.pads.dir.i):
+            m.d.comb += self.pads.data.oe.eq(1)
+            with m.If(~self.pads.stp.o):
+                with m.If(self.sink.valid):
+                    m.d.comb += self.pads.data.o.eq(self.sink.data)
+                    with m.If(self.sink.last & self.pads.nxt.i):
+                        m.d.sync += self.pads.stp.o.eq(1)
+                m.d.comb += self.sink.ready.eq(self.pads.nxt.i)
+
+        with m.If(self.pads.stp.o):
+            m.d.sync += self.pads.stp.o.eq(0)
+
+        # Receive
+        with m.If(dir_r & self.pads.dir.i):
+            m.d.sync += [
+                self.source.valid.eq(1),
+                self.source.data.eq(self.pads.data.i),
+                self.source.cmd.eq(~self.pads.nxt.i)
+            ]
+        with m.Else():
+            m.d.sync += self.source.valid.eq(0)
+
+        m.d.comb += self.source.last.eq(dir_r & ~self.pads.dir.i)
 
         return m
 
@@ -209,7 +255,8 @@ class ULPIDeviceController(Elaboratable):
     def elaborate(self, platform):
         m = Module()
 
-        phy      = m.submodules.phy      = ULPIPhyS7(self.pads)
+        # phy      = m.submodules.phy      = ULPIPhyS7(self.pads)
+        phy      = m.submodules.phy      = ULPIPhy2(self.pads)
         timer    = m.submodules.timer    = ULPITimer()
         splitter = m.submodules.splitter = ULPISplitter()
         sender   = m.submodules.sender   = ULPISender()
