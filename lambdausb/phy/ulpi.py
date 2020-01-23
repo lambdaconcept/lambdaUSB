@@ -3,99 +3,242 @@ from nmigen import *
 from ..lib import stream
 
 
-__all__ = ["ULPIPhy"]
+__all__ = ["PHY", "Transceiver"]
 
 
-class ULPIPhy(Elaboratable):
-    def __init__(self, pads):
-        self.pads = pads
-
-        self.sink = stream.Endpoint([("data", 8)])
+class PHY(Elaboratable):
+    def __init__(self, *, pins, rx_depth=32, tx_depth=32):
+        self.sink   = stream.Endpoint([("data", 8)])
         self.source = stream.Endpoint([("data", 8)])
 
+        self.rx_depth = rx_depth
+        self.tx_depth = tx_depth
+        self._pins    = pins
+
     def elaborate(self, platform):
         m = Module()
 
-        cd_ulpi = m.domains.cd_ulpi = ClockDomain("ulpi", local=True)
-        m.d.comb += cd_ulpi.clk.eq(self.pads.clk.i)
+        m.domains += ClockDomain("ulpi", local=True)
 
-        ctl = m.submodules.ctl = DomainRenamer("ulpi")(ULPIDeviceController(self.pads))
-
-        rx_fifo = stream.AsyncFIFO([("data", 8)], 128, w_domain="ulpi", r_domain="sync")
+        rx_fifo = stream.AsyncFIFO([("data", 8)], self.rx_depth, w_domain="ulpi", r_domain="sync")
+        tx_fifo = stream.AsyncFIFO([("data", 8)], self.tx_depth, w_domain="sync", r_domain="ulpi")
         m.submodules.rx_fifo = rx_fifo
-
-        tx_fifo = stream.AsyncFIFO([("data", 8)], 128, w_domain="sync", r_domain="ulpi")
         m.submodules.tx_fifo = tx_fifo
 
+        m.submodules.xcvr = xcvr = Transceiver(domain="ulpi", pins=self._pins)
+        m.submodules.timer = timer = _Timer()
+        m.submodules.splitter = splitter = _Splitter()
+        m.submodules.sender = sender = _Sender()
+
         m.d.comb += [
-            ctl.source.connect(rx_fifo.sink),
+            splitter.source.connect(rx_fifo.sink),
             rx_fifo.source.connect(self.source),
             self.sink.connect(tx_fifo.sink),
-            tx_fifo.source.connect(ctl.sink)
+            tx_fifo.source.connect(sender.sink),
         ]
+
+        line_state = Signal(2)
+        with m.If(xcvr.source.valid & xcvr.source.cmd):
+            m.d.ulpi += line_state.eq(xcvr.source.data[:2])
+
+        hs_mode = Signal()
+
+        with m.FSM(domain="ulpi") as fsm:
+            with m.State("INIT-0"):
+                m.d.ulpi += hs_mode.eq(0)
+                m.d.comb += [
+                    xcvr.rst.eq(1),
+                    timer.cnt10ms.eq(1)
+                ]
+                with m.If(timer.done):
+                    m.next = "INIT-1"
+
+            with m.State("INIT-1"):
+                m.d.comb += timer.cnt10ms.eq(1)
+                with m.If(timer.done):
+                    m.next = "RESET-PHY-1"
+
+            with m.State("RESET-PHY-1"):
+                m.d.comb += [
+                    xcvr.sink.data.eq(0x80 | 0x4),
+                    xcvr.sink.valid.eq(1)
+                ]
+                with m.If(xcvr.sink.ready):
+                    m.next = "RESET-PHY-2"
+                m.d.comb += timer.cnt5s.eq(1)
+                with m.If(timer.done):
+                    m.next = "INIT-0"
+
+            with m.State("RESET-PHY-2"):
+                m.d.comb += [
+                    xcvr.sink.data.eq(0b01100101),
+                    xcvr.sink.last.eq(1),
+                    xcvr.sink.valid.eq(1),
+                ]
+                with m.If(xcvr.source.valid):
+                    m.next = "WRITE-OTGCTRL-1"
+                with m.Elif(timer.done):
+                    m.next = "INIT-1"
+
+            with m.State("WRITE-OTGCTRL-1"):
+                m.d.comb += [
+                    xcvr.sink.data.eq(0x80 | 0xa),
+                    xcvr.sink.valid.eq(1)
+                ]
+                with m.If(xcvr.sink.ready):
+                    m.next = "WRITE-OTGCTRL-2"
+
+            with m.State("WRITE-OTGCTRL-2"):
+                m.d.comb += [
+                    xcvr.sink.data.eq(0),
+                    xcvr.sink.last.eq(1),
+                    xcvr.sink.valid.eq(1)
+                ]
+                with m.If(xcvr.sink.ready):
+                    m.next = "IDLE"
+                m.d.comb += timer.cnt50ns.eq(1)
+                with m.If(timer.done):
+                    m.next = "WRITE-OTGCTRL-1"
+
+            with m.State("IDLE"):
+                with m.If(line_state == 0):
+                    m.d.comb += timer.cnt2ms.eq(1)
+                with m.If(timer.done):
+                    with m.If(hs_mode):
+                        m.next = "INIT-0"
+                    with m.Else():
+                        m.next = "CHIRP-0"
+                m.d.comb += [
+                    xcvr.source.connect(splitter.sink),
+                    sender.source.connect(xcvr.sink)
+                ]
+
+            with m.State("CHIRP-0"):
+                m.d.comb += [
+                    xcvr.sink.data.eq(0x80 | 0x4),
+                    xcvr.sink.valid.eq(1)
+                ]
+                with m.If(xcvr.sink.ready):
+                    m.next = "CHIRP-1"
+
+            with m.State("CHIRP-1"):
+                m.d.comb += [
+                    xcvr.sink.data.eq(0b01010000),
+                    xcvr.sink.last.eq(1),
+                    xcvr.sink.valid.eq(1)
+                ]
+                with m.If(xcvr.sink.ready):
+                    m.next = "CHIRP-2"
+
+            with m.State("CHIRP-2"):
+                m.d.comb += [
+                    xcvr.sink.valid.eq(1),
+                    xcvr.sink.data.eq(0b01000000)
+                ]
+                with m.If(xcvr.sink.ready):
+                    m.next = "CHIRP-3"
+
+            with m.State("CHIRP-3"):
+                m.d.comb += [
+                    xcvr.sink.valid.eq(1),
+                    xcvr.sink.data.eq(0x00),
+                    timer.cnt2ms.eq(1)
+                ]
+                with m.If(timer.done):
+                    m.next = "CHIRP-4"
+                    m.d.comb += xcvr.sink.last.eq(1)
+
+            with m.State("CHIRP-4"):
+                m.d.comb += timer.cnt2ms.eq(1)
+                with m.If(timer.done):
+                    m.next = "CHIRP-5"
+
+            with m.State("CHIRP-5"):
+                m.d.comb += [
+                    xcvr.sink.data.eq(0x80 | 0x4),
+                    xcvr.sink.valid.eq(1)
+                ]
+                with m.If(xcvr.sink.ready):
+                    m.next = "CHIRP-6"
+
+            with m.State("CHIRP-6"):
+                m.d.comb += [
+                    xcvr.sink.data.eq(0b01000000),
+                    xcvr.sink.last.eq(1),
+                    xcvr.sink.valid.eq(1)
+                ]
+                with m.If(xcvr.sink.ready):
+                    m.d.ulpi += hs_mode.eq(1)
+                    m.next = "IDLE"
 
         return m
 
 
-class ULPIPhyS7(Elaboratable):
-    def __init__(self, pads):
+class Transceiver(Elaboratable):
+    def __init__(self, domain="ulpi", pins=None):
         self.sink   = stream.Endpoint([('data', 8)])
         self.source = stream.Endpoint([('data', 8), ('cmd', 1)])
-        self.reset  = Signal()
-        self.pads   = pads
+
+        self.rst  = Signal()
+        self.dir  = Signal()
+        self.nxt  = Signal()
+        self.stp  = Signal()
+        self.data = Record([("i", 8), ("o", 8), ("oe", 1)])
+
+        self._domain = domain
+        self._pins   = pins
 
     def elaborate(self, platform):
         m = Module()
 
-        last = Signal()
-        odir = Signal()
+        if self._pins is not None:
+            m.d.comb += [
+                ClockSignal(self._domain).eq(self._pins.clk.i),
+                self.dir.eq(self._pins.dir.i),
+                self.nxt.eq(self._pins.nxt.i),
+                self.data.i.eq(self._pins.data.i),
+                self._pins.data.o.eq(self.data.o),
+                self._pins.data.oe.eq(self.data.oe),
+                self._pins.rst.o.eq(self.rst),
+                self._pins.stp.o.eq(self.stp),
+            ]
 
-        data_i = Signal(8)
-        for i in range(8):
-            m.submodules += Instance("IDDR",
-                p_DDR_CLK_EDGE="SAME_EDGE", p_INIT_Q1=0, p_INIT_Q2=0, p_SRTYPE="ASYNC",
-                i_C=ClockSignal("sync"),
-                i_CE=Const(1), i_S=Const(0), i_R=Const(0),
-                i_D=self.pads.data.i[i], o_Q1=Signal(), o_Q2=data_i[i]
-            )
+        dir_r = Signal()
+        m.d[self._domain] += dir_r.eq(self.dir)
 
-        m.d.comb += [
-            self.pads.rst.eq(self.reset),
-            self.pads.data.oe.eq(~odir)
-        ]
+        # Transmit
+        with m.If(~dir_r & ~self.dir):
+            m.d.comb += self.data.oe.eq(1)
+            with m.If(~self.stp):
+                with m.If(self.sink.valid):
+                    m.d.comb += self.data.o.eq(self.sink.data)
+                    with m.If(self.sink.last & self.nxt):
+                        m.d[self._domain] += self.stp.eq(1)
+                m.d.comb += self.sink.ready.eq(self.nxt)
 
-        with m.If(self.sink.valid & ~last):
-            m.d.comb += self.pads.data.o.eq(self.sink.data)
+        with m.If(self.stp):
+            m.d[self._domain] += self.stp.eq(0)
+
+        # Receive
+        with m.If(dir_r & self.dir):
+            m.d[self._domain] += [
+                self.source.valid.eq(1),
+                self.source.data.eq(self.data.i),
+                self.source.cmd.eq(~self.nxt)
+            ]
         with m.Else():
-            m.d.comb += self.pads.data.o.eq(0)
-        m.d.comb += self.sink.ready.eq(~self.pads.dir & self.pads.nxt)
-        with m.If(~self.pads.dir):
-            m.d.comb += self.pads.stp.eq(last)
-        m.d.comb += [
-            self.source.last.eq(odir & ~self.pads.dir),
-            self.source.data.eq(data_i)
-        ]
+            m.d[self._domain] += self.source.valid.eq(0)
 
-        with m.If(self.pads.nxt):
-            m.d.sync += last.eq(self.sink.last)
-        with m.Else():
-            m.d.sync += last.eq(0)
-
-        m.d.sync += [
-            odir.eq(self.pads.dir),
-            self.source.cmd.eq(~self.pads.nxt),
-            self.source.valid.eq(odir & self.pads.dir)
-        ]
+        m.d.comb += self.source.last.eq(dir_r & ~self.dir)
 
         return m
 
 
-class ULPITimer(Elaboratable):
+class _Timer(Elaboratable):
     def __init__(self):
-        self.cnt50ns = Signal() # 50ns 256
-        self.cnt2ms  = Signal() # 2ms  120000
-        self.cnt3ms  = Signal() # 3ms  180000
-        self.cnt10ms = Signal() # 10ms 600000
+        self.cnt50ns = Signal()
+        self.cnt2ms  = Signal()
+        self.cnt10ms = Signal()
         self.cnt5s   = Signal()
         self.done    = Signal()
 
@@ -104,19 +247,17 @@ class ULPITimer(Elaboratable):
 
         counter = Signal(30)
 
-        with m.If(self.cnt2ms | self.cnt3ms | self.cnt10ms | self.cnt50ns | self.cnt5s):
+        with m.If(self.cnt50ns | self.cnt2ms | self.cnt10ms | self.cnt5s):
             with m.If(self.done):
-                m.d.sync += counter.eq(0)
+                m.d.ulpi += counter.eq(0)
             with m.Else():
-                m.d.sync += counter.eq(counter + 1)
+                m.d.ulpi += counter.eq(counter + 1)
         with m.Else():
-            m.d.sync += counter.eq(0)
+            m.d.ulpi += counter.eq(0)
 
         with m.If(self.cnt50ns & (counter == 256)):
             m.d.comb += self.done.eq(1)
         with m.Elif(self.cnt2ms & (counter == 120000)):
-            m.d.comb += self.done.eq(1)
-        with m.Elif(self.cnt3ms & (counter == 180000)):
             m.d.comb += self.done.eq(1)
         with m.Elif(self.cnt10ms & (counter == 600000)):
             m.d.comb += self.done.eq(1)
@@ -126,65 +267,58 @@ class ULPITimer(Elaboratable):
         return m
 
 
-class ULPISplitter(Elaboratable):
+class _Splitter(Elaboratable):
     def __init__(self):
-        self.sink = stream.Endpoint([('data', 8), ('cmd', 1)])
+        self.sink   = stream.Endpoint([('data', 8), ('cmd', 1)])
         self.source = stream.Endpoint([('data', 8)])
 
     def elaborate(self, platform):
         m = Module()
 
-        prevdata = Signal(8)
-        prevdataset = Signal()
+        buf_data  = Signal(8)
+        buf_valid = Signal()
+
+        m.d.ulpi += self.source.valid.eq(0)
 
         with m.If(self.sink.valid):
             with m.If(~self.sink.cmd):
-                with m.If(prevdataset):
-                    m.d.sync += [
-                        self.source.valid.eq(1),
-                        self.source.data.eq(prevdata),
-                        self.source.last.eq(0)
-                    ]
-                with m.Else():
-                    m.d.sync += self.source.valid.eq(0)
-                m.d.sync += [
-                    prevdata.eq(self.sink.data),
-                    prevdataset.eq(1)
+                m.d.ulpi += [
+                    buf_data.eq(self.sink.data),
+                    buf_valid.eq(1),
                 ]
-            with m.Else():
-                with m.If(self.sink.data & 0x38 == 0x08):
-                    with m.If(prevdataset):
-                        m.d.sync += [
-                            self.source.valid.eq(1),
-                            self.source.last.eq(1),
-                            self.source.data.eq(prevdata),
-                            prevdataset.eq(0)
-                        ]
-                    with m.Else():
-                        m.d.sync += self.source.valid.eq(0)
-                with m.Else():
-                    m.d.sync += self.source.valid.eq(0)
-        with m.Else():
-            m.d.sync += self.source.valid.eq(0)
+                with m.If(buf_valid):
+                    m.d.ulpi += [
+                        self.source.valid.eq(1),
+                        self.source.data.eq(buf_data),
+                        self.source.last.eq(0),
+                    ]
+            with m.Elif(self.sink.data & 0x38 == 0x08):
+                with m.If(buf_valid):
+                    m.d.ulpi += [
+                        self.source.valid.eq(1),
+                        self.source.last.eq(1),
+                        self.source.data.eq(buf_data),
+                        buf_valid.eq(0),
+                    ]
 
         return m
 
 
-class ULPISender(Elaboratable):
+class _Sender(Elaboratable):
     def __init__(self):
-        self.sink = stream.Endpoint([("data", 8)])
+        self.sink   = stream.Endpoint([("data", 8)])
         self.source = stream.Endpoint([("data", 8)])
 
     def elaborate(self, platform):
         m = Module()
 
-        lst_r = Signal(reset=1)
+        last_r = Signal(reset=1)
 
-        #detect first byte in order to replace it with 0100xxxx with xxxx being the PID
+        # Detect first byte and replace it with 0100xxxx (with xxxx being the PID).
         with m.If(self.sink.valid & self.sink.ready):
-            m.d.sync += lst_r.eq(self.sink.last)
+            m.d.ulpi += last_r.eq(self.sink.last)
 
-        with m.If(lst_r):
+        with m.If(last_r):
             m.d.comb += [
                 self.source.data.eq(Cat(self.sink.data[0:4], 0b0100)),
                 self.source.valid.eq(self.sink.valid),
@@ -195,162 +329,5 @@ class ULPISender(Elaboratable):
             m.d.comb += [
                 self.sink.connect(self.source)
             ]
-
-        return m
-
-
-class ULPIDeviceController(Elaboratable):
-    def __init__(self, pads):
-        self.pads = pads
-
-        self.sink = stream.Endpoint([("data", 8)])
-        self.source = stream.Endpoint([("data", 8)])
-
-    def elaborate(self, platform):
-        m = Module()
-
-        phy      = m.submodules.phy      = ULPIPhyS7(self.pads)
-        timer    = m.submodules.timer    = ULPITimer()
-        splitter = m.submodules.splitter = ULPISplitter()
-        sender   = m.submodules.sender   = ULPISender()
-
-        m.d.comb += [
-            self.sink.connect(sender.sink),
-            splitter.source.connect(self.source)
-        ]
-
-        line_state = Signal(2)
-        with m.If(phy.source.valid & phy.source.cmd):
-            m.d.sync += line_state.eq(phy.source.data[:2])
-
-        is_hs = Signal()
-
-        with m.FSM() as fsm:
-            with m.State("INIT0"):
-                m.d.sync += is_hs.eq(0)
-                m.d.comb += [
-                    phy.reset.eq(1),
-                    timer.cnt10ms.eq(1)
-                ]
-                with m.If(timer.done):
-                    m.next = "INIT"
-
-            with m.State("INIT"):
-                m.d.comb += timer.cnt10ms.eq(1)
-                with m.If(timer.done):
-                    m.next = "RESET-PHY-1"
-
-            with m.State("RESET-PHY-1"):
-                m.d.comb += [
-                    phy.sink.data.eq(0x80 | 0x4),
-                    phy.sink.valid.eq(1)
-                ]
-                with m.If(phy.sink.ready):
-                    m.next = "RESET-PHY-2"
-                m.d.comb += timer.cnt5s.eq(1)
-                with m.If(timer.done):
-                    m.next = "INIT0"
-
-            with m.State("RESET-PHY-2"):
-                m.d.comb += [
-                    phy.sink.data.eq(0b01100101),
-                    phy.sink.last.eq(1),
-                    phy.sink.valid.eq(1),
-                ]
-                with m.If(phy.source.valid):
-                    m.next = "WRITE-OTGCTRL-1"
-                with m.Elif(timer.done):
-                    m.next = "INIT"
-
-            with m.State("WRITE-OTGCTRL-1"):
-                m.d.comb += [
-                    phy.sink.data.eq(0x80 | 0xa),
-                    phy.sink.valid.eq(1)
-                ]
-                with m.If(phy.sink.ready):
-                    m.next = "WRITE-OTGCTRL-2"
-
-            with m.State("WRITE-OTGCTRL-2"):
-                m.d.comb += [
-                    phy.sink.data.eq(0),
-                    phy.sink.last.eq(1),
-                    phy.sink.valid.eq(1)
-                ]
-                with m.If(phy.sink.ready):
-                    m.next = "IDLE"
-                m.d.comb += timer.cnt50ns.eq(1)
-                with m.If(timer.done):
-                    m.next = "WRITE-OTGCTRL-1"
-
-            with m.State("IDLE"):
-                with m.If(line_state == 0):
-                    m.d.comb += timer.cnt2ms.eq(1)
-                with m.If(timer.done):
-                    with m.If(is_hs):
-                        m.next = "INIT0"
-                    with m.Else():
-                        m.next = "CHIRP-0"
-                m.d.comb += [
-                    phy.source.connect(splitter.sink),
-                    sender.source.connect(phy.sink)
-                ]
-
-            with m.State("CHIRP-0"):
-                m.d.comb += [
-                    phy.sink.data.eq(0x80 | 0x4),
-                    phy.sink.valid.eq(1)
-                ]
-                with m.If(phy.sink.ready):
-                    m.next = "CHIRP-1"
-
-            with m.State("CHIRP-1"):
-                m.d.comb += [
-                    phy.sink.data.eq(0b01010000),
-                    phy.sink.last.eq(1),
-                    phy.sink.valid.eq(1)
-                ]
-                with m.If(phy.sink.ready):
-                    m.next = "CHIRP-2"
-
-            with m.State("CHIRP-2"):
-                m.d.comb += [
-                    phy.sink.valid.eq(1),
-                    phy.sink.data.eq(0b01000000)
-                ]
-                with m.If(phy.sink.ready):
-                    m.next = "CHIRP-3"
-
-            with m.State("CHIRP-3"):
-                m.d.comb += [
-                    phy.sink.valid.eq(1),
-                    phy.sink.data.eq(0x00),
-                    timer.cnt2ms.eq(1)
-                ]
-                with m.If(timer.done):
-                    m.next = "CHIRP-4"
-                    m.d.comb += phy.sink.last.eq(1)
-
-            with m.State("CHIRP-4"):
-                m.d.comb += timer.cnt2ms.eq(1)
-                with m.If(timer.done):
-                    m.next = "CHIRP-5"
-
-            with m.State("CHIRP-5"):
-                m.d.comb += [
-                    phy.sink.data.eq(0x80 | 0x4),
-                    phy.sink.valid.eq(1)
-                ]
-                with m.If(phy.sink.ready):
-                    m.next = "CHIRP-6"
-
-            with m.State("CHIRP-6"):
-                m.d.comb += [
-                    phy.sink.data.eq(0b01000000),
-                    phy.sink.last.eq(1),
-                    phy.sink.valid.eq(1)
-                ]
-                with m.If(phy.sink.ready):
-                    m.d.sync += is_hs.eq(1)
-                    m.next = "IDLE"
 
         return m
