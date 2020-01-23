@@ -73,20 +73,20 @@ class _FIFOWrapper:
         fifo_din = Record(self.layout)
         fifo_dout = Record(self.layout)
         m.d.comb += [
-            fifo.din.eq(fifo_din),
-            fifo_dout.eq(fifo.dout),
+            fifo.w_data.eq(fifo_din),
+            fifo_dout.eq(fifo.r_data),
 
-            self.sink.ready.eq(fifo.writable),
-            fifo.we.eq(self.sink.valid),
+            self.sink.ready.eq(fifo.w_rdy),
+            fifo.w_en.eq(self.sink.valid),
             fifo_din.first.eq(self.sink.first),
             fifo_din.last.eq(self.sink.last),
             fifo_din.payload.eq(self.sink.payload),
 
-            self.source.valid.eq(fifo.readable),
+            self.source.valid.eq(fifo.r_rdy),
             self.source.first.eq(fifo_dout.first),
             self.source.last.eq(fifo_dout.last),
             self.source.payload.eq(fifo_dout.payload),
-            fifo.re.eq(self.source.ready)
+            fifo.r_en.eq(self.source.ready)
         ]
 
         return m
