@@ -22,6 +22,7 @@ class USBController(Elaboratable):
         self.host_zlp     = Signal()
         self.read_xfer    = Signal(2)
         self.write_xfer   = Signal(2)
+        self.ep0_dev_addr = Signal(7)
 
     def elaborate(self, platform):
         m = Module()
@@ -29,9 +30,15 @@ class USBController(Elaboratable):
         crc16 = m.submodules.crc16 = CRC(poly=0b11000000000000101, size=16, dw=8, init=0xffff)
         crc5  = m.submodules.crc5  = CRC(poly=0b101, size=5, dw=11, init=0x1f)
 
+        # When a SET_ADDRESS request is received on EP 0, the address is only updated after the
+        # device has responded to an IN token, with a zero-length packet.
+        dev_addr = Signal.like(self.ep0_dev_addr)
+        with m.If(self.sink_data.valid & self.sink_data.empty & self.sink_data.ready):
+            m.d.sync += dev_addr.eq(self.ep0_dev_addr)
+
         rx_pid = Signal(8)
         rx_ep = Signal(4)
-        rx_dev = Signal(8)
+        rx_addr = Signal(7)
         rx_token_byte_0 = Signal(8)
         rx_crc5 = Signal(5)
         rx_frame_no = Signal(11)
@@ -86,26 +93,28 @@ class USBController(Elaboratable):
                         # A token packet has 3 bytes. This one has more than 3, ignore it.
                         m.next = "FLUSH"
                     with m.Elif(crc5.crc == self.phy.source.data[3:8]):
-                        m.d.sync += [
-                            rx_dev.eq(rx_token_byte_0[:-2]),
-                            rx_ep.eq(Cat(rx_token_byte_0[-1], self.phy.source.data[:3]))
-                        ]
-                        with m.If(rx_pid == pid_from(Packet.SPECIAL, Special.PING)):
-                            m.next = "SEND-PONG"
+                        m.d.comb += rx_addr.eq(rx_token_byte_0[:-2])
+                        m.d.sync += rx_ep.eq(Cat(rx_token_byte_0[-1], self.phy.source.data[:3]))
+                        with m.If(rx_addr == dev_addr):
+                            with m.If(rx_pid == pid_from(Packet.SPECIAL, Special.PING)):
+                                m.next = "SEND-PONG"
+                            with m.Else():
+                                with m.Switch(rx_pid[2:4]):
+                                    with m.Case(Token.SOF):
+                                        m.d.sync += rx_frame_no.eq(Cat(rx_token_byte_0, self.phy.source.data[:3]))
+                                        m.next = "IDLE"
+                                    with m.Case(Token.OUT):
+                                        m.d.sync += rx_setup.eq(0)
+                                        m.next = "RECEIVE-DATA-0"
+                                    with m.Case(Token.IN):
+                                        m.d.comb += crc16.clr.eq(1)
+                                        m.next = "SEND-DATA-0"
+                                    with m.Case(Token.SETUP):
+                                        m.d.sync += rx_setup.eq(1)
+                                        m.next = "RECEIVE-DATA-0"
                         with m.Else():
-                            with m.Switch(rx_pid[2:4]):
-                                with m.Case(Token.SOF):
-                                    m.d.sync += rx_frame_no.eq(Cat(rx_token_byte_0, self.phy.source.data[:3]))
-                                    m.next = "IDLE"
-                                with m.Case(Token.OUT):
-                                    m.d.sync += rx_setup.eq(0)
-                                    m.next = "RECEIVE-DATA-0"
-                                with m.Case(Token.IN):
-                                    m.d.comb += crc16.clr.eq(1)
-                                    m.next = "SEND-DATA-0"
-                                with m.Case(Token.SETUP):
-                                    m.d.sync += rx_setup.eq(1)
-                                    m.next = "RECEIVE-DATA-0"
+                            # Wrong device address, ignore packet.
+                            m.next = "IDLE"
                     with m.Else():
                         # Bad CRC5, ignore packet.
                         m.next = "IDLE"

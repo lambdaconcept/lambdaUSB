@@ -76,7 +76,8 @@ cfg_out = usb_dev.output_port(0x0, 64, Transfer.CONTROL)
 
 m.d.comb += [
     cfg_ep.source.connect(cfg_in),
-    cfg_out.connect(cfg_ep.sink)
+    cfg_out.connect(cfg_ep.sink),
+    usb_dev.ep0_dev_addr.eq(cfg_ep.dev_addr)
 ]
 ```
 

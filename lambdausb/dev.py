@@ -18,6 +18,8 @@ class USBDevice(Elaboratable):
         self._input_map = OrderedDict()
         self._output_map  = OrderedDict()
 
+        self.ep0_dev_addr = Signal(7)
+
     def input_port(self, ep_addr, max_size, xfer_type):
         if not isinstance(ep_addr, int) or not ep_addr in range(0, 16):
             raise TypeError("Endpoint address must be an integer in [0..16), not '{!r}'"
@@ -70,6 +72,8 @@ class USBDevice(Elaboratable):
         o_buffer   = m.submodules.o_buffer   = USBOutputBuffer(self._output_map)
 
         m.d.comb += [
+            controller.ep0_dev_addr.eq(self.ep0_dev_addr),
+
             # phy -> controller -> o_buffer -> o_arbiter -> endpoints
             controller.source_write.connect(o_buffer.sink_write),
             controller.source_data.connect(o_buffer.sink_data),

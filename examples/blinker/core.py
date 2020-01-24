@@ -55,7 +55,8 @@ class USBBlinker(Elaboratable):
 
         m.d.comb += [
             cfg_ep.source.connect(cfg_in),
-            cfg_out.connect(cfg_ep.sink)
+            cfg_out.connect(cfg_ep.sink),
+            usb_dev.ep0_dev_addr.eq(cfg_ep.dev_addr),
         ]
 
         # RGB blinker endpoint
