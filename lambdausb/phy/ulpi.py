@@ -198,7 +198,7 @@ class ULPISplitter(Elaboratable):
                     prevdataset.eq(1)
                 ]
             with m.Else():
-                with m.If(self.sink.data & 0x38 == 0x08):
+                with m.If(self.sink.data & 0x30 == 0x00):
                     with m.If(prevdataset):
                         m.d.sync += [
                             self.source.valid.eq(1),
