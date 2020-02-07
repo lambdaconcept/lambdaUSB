@@ -16,7 +16,7 @@ class ULPIPhy(Elaboratable):
     def elaborate(self, platform):
         m = Module()
 
-        cd_ulpi = m.domains.cd_ulpi = ClockDomain("ulpi", local=False)
+        m.domains.ulpi = cd_ulpi = ClockDomain("ulpi", local=False)
         m.submodules += Instance("BUFG",
             i_I=self.pads.clk.i,
             o_O=cd_ulpi.clk
