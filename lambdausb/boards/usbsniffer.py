@@ -1,3 +1,6 @@
+import os
+import subprocess
+
 from nmigen.build import *
 from nmigen.vendor.xilinx_7series import *
 
