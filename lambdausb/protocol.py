@@ -1,16 +1,6 @@
 from enum import IntEnum
 
 
-__all__ = [ "Transfer", "Packet", "Token", "Data", "Handshake", "Special", "pid_from", "LineState"]
-
-
-class Transfer(IntEnum):
-    CONTROL     = 0
-    BULK        = 1
-    INTERRUPT   = 2
-    ISOCHRONOUS = 3
-
-
 class Packet(IntEnum):
     TOKEN     = 0b01
     DATA      = 0b11

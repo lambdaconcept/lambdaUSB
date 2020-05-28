@@ -1,21 +1,22 @@
 from nmigen import *
 
-from .lib import stream
+from .endpoint import *
 
 
-__all__ = ["ConfigurationEndpoint"]
+__all__ = ["ConfigurationFSM"]
 
 
 USB_REQ_GETDESCRIPTOR = 0x06
 USB_REQ_GETSTATUS     = 0x00
 
 
-class ConfigurationEndpoint(Elaboratable):
+class ConfigurationFSM(Elaboratable):
     def __init__(self, descriptor_map, rom_init):
+        self.ep_in  = InputEndpoint(xfer=Transfer.CONTROL, max_size=64)
+        self.ep_out = OutputEndpoint(xfer=Transfer.CONTROL, max_size=64)
+
         self.descriptor_map = descriptor_map
-        self.rom_init       = rom_init
-        self.sink           = stream.Endpoint([("setup", 1), ("data", 8)])
-        self.source         = stream.Endpoint([("empty", 1), ("data", 8)])
+        self.rom_init = rom_init
 
     def elaborate(self, platform):
         m = Module()
@@ -61,10 +62,10 @@ class ConfigurationEndpoint(Elaboratable):
 
         with m.FSM() as fsm:
             with m.State("RECEIVE"):
-                m.d.comb += self.sink.ready.eq(1)
-                with m.If(self.sink.valid):
-                    m.d.sync += rx_buf[rx_count].eq(self.sink.data)
-                    with m.If(self.sink.last):
+                m.d.comb += self.ep_out.rdy.eq(1)
+                with m.If(self.ep_out.stb):
+                    m.d.sync += rx_buf[rx_count].eq(self.ep_out.data)
+                    with m.If(self.ep_out.lst):
                         m.d.sync += rx_count.eq(0)
                         with m.If(rx_count == 7):
                             with m.If(ctl_type == 0x80):
@@ -87,16 +88,16 @@ class ConfigurationEndpoint(Elaboratable):
 
             with m.State("SEND-DESCRIPTOR"):
                 m.d.comb += [
-                    self.source.valid.eq(1),
-                    self.source.data.eq(rom_rp.data)
+                    self.ep_in.stb.eq(1),
+                    self.ep_in.data.eq(rom_rp.data)
                 ]
                 with m.If(req_size < ctl_size):
-                    m.d.comb += self.source.last.eq(tx_sent == (req_size - 1))
+                    m.d.comb += self.ep_in.lst.eq(tx_sent == (req_size - 1))
                 with m.Else():
-                    m.d.comb += self.source.last.eq(tx_sent == (ctl_size - 1))
+                    m.d.comb += self.ep_in.lst.eq(tx_sent == (ctl_size - 1))
                 m.d.comb += rom_rp.addr.eq(req_offset + tx_sent + 1)
-                with m.If(self.source.ready):
-                    with m.If(self.source.last):
+                with m.If(self.ep_in.rdy):
+                    with m.If(self.ep_in.lst):
                         m.d.sync += rx_count.eq(0)
                         m.next = "RECEIVE"
                     with m.Else():
@@ -105,11 +106,11 @@ class ConfigurationEndpoint(Elaboratable):
 
             with m.State("SEND-STATUS"):
                 m.d.comb += [
-                    self.source.valid.eq(1),
-                    self.source.data.eq(0x00),
-                    self.source.last.eq(status_last)
+                    self.ep_in.stb.eq(1),
+                    self.ep_in.data.eq(0x00),
+                    self.ep_in.lst.eq(status_last)
                 ]
-                with m.If(self.source.ready):
+                with m.If(self.ep_in.rdy):
                     m.d.sync += status_last.eq(1),
                     with m.If(status_last):
                         m.d.sync += rx_count.eq(0)
@@ -117,18 +118,18 @@ class ConfigurationEndpoint(Elaboratable):
 
             with m.State("SEND-NODATA"):
                 m.d.comb += [
-                    self.source.valid.eq(1),
-                    self.source.data.eq(0x00),
-                    self.source.empty.eq(1),
-                    self.source.last.eq(1)
+                    self.ep_in.stb.eq(1),
+                    self.ep_in.data.eq(0x00),
+                    self.ep_in.zlp.eq(1),
+                    self.ep_in.lst.eq(1)
                 ]
-                with m.If(self.source.ready):
+                with m.If(self.ep_in.rdy):
                     m.d.sync += rx_count.eq(0)
                     m.next = "RECEIVE"
 
             with m.State("WAIT-LAST"):
-                m.d.comb += self.sink.ready.eq(1)
-                with m.If(self.sink.valid & self.sink.last):
+                m.d.comb += self.ep_out.rdy.eq(1)
+                with m.If(self.ep_out.stb & self.ep_out.lst):
                     m.d.sync += rx_count.eq(0)
                     m.next = "RECEIVE"
 

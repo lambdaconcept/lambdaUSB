@@ -1,16 +1,15 @@
 from nmigen import *
 
-from lambdausb.cfg import ConfigurationEndpoint
+from lambdausb.cfg import ConfigurationFSM
 from lambdausb.dev import USBDevice
-from lambdausb.lib import stream
 from lambdausb.phy import ulpi
-from lambdausb.protocol import Transfer
+from lambdausb.endpoint import *
 
 
-class RgbBlinkerEndpoint(Elaboratable):
-    def __init__(self, rgb_led):
-        self.rgb_led = rgb_led
-        self.sink = stream.Endpoint([("data", 8)])
+class RgbBlinker(Elaboratable):
+    def __init__(self, pins):
+        self.ep_out = OutputEndpoint(xfer=Transfer.BULK, max_size=512)
+        self._pins  = pins
 
     def elaborate(self, platform):
         m = Module()
@@ -18,9 +17,9 @@ class RgbBlinkerEndpoint(Elaboratable):
         led = Signal()
         sel = Record([("r", 1), ("g", 1), ("b", 1)])
 
-        m.d.comb += self.sink.ready.eq(Const(1))
-        with m.If(self.sink.valid):
-            m.d.sync += sel.eq(self.sink.data[:3])
+        m.d.comb += self.ep_out.rdy.eq(1)
+        with m.If(self.ep_out.stb):
+            m.d.sync += sel.eq(self.ep_out.data[:3])
 
         clk_freq = platform.default_clk_frequency
         ctr = Signal(range(int(clk_freq//2)), reset=int(clk_freq//2)-1)
@@ -31,9 +30,9 @@ class RgbBlinkerEndpoint(Elaboratable):
             m.d.sync += ctr.eq(ctr - 1)
 
         m.d.comb += [
-            self.rgb_led.r.o.eq(sel.r & led),
-            self.rgb_led.g.o.eq(sel.g & led),
-            self.rgb_led.b.o.eq(sel.b & led)
+            self._pins.r.o.eq(sel.r & led),
+            self._pins.g.o.eq(sel.g & led),
+            self._pins.b.o.eq(sel.b & led)
         ]
 
         return m
@@ -44,25 +43,18 @@ class USBBlinker(Elaboratable):
         m = Module()
 
         # USB device
-        ulpi_phy = m.submodules.ulpi_phy = ulpi.PHY(pins=platform.request("ulpi", 0))
-        usb_dev  = m.submodules.usb_dev  = USBDevice(ulpi_phy)
+        m.submodules.ulpi_phy = ulpi_phy = ulpi.PHY(pins=platform.request("ulpi", 0))
+        m.submodules.usb_dev  = usb_dev  = USBDevice(ulpi_phy)
 
         # Configuration endpoint
         from config import descriptor_map, rom_init
-        cfg_ep  = m.submodules.cfg_ep = ConfigurationEndpoint(descriptor_map, rom_init)
-        cfg_in  = usb_dev.input_port(0x0, 64, Transfer.CONTROL)
-        cfg_out = usb_dev.output_port(0x0, 64, Transfer.CONTROL)
-
-        m.d.comb += [
-            cfg_ep.source.connect(cfg_in),
-            cfg_out.connect(cfg_ep.sink)
-        ]
+        m.submodules.cfg_fsm = cfg_fsm = ConfigurationFSM(descriptor_map, rom_init)
+        usb_dev.add_endpoint(cfg_fsm.ep_in,  addr=0, dir="i")
+        usb_dev.add_endpoint(cfg_fsm.ep_out, addr=0, dir="o")
 
         # RGB blinker endpoint
-        rgb_ep  = m.submodules.rgb_ep = RgbBlinkerEndpoint(platform.request("rgb_led", 0))
-        rgb_out = usb_dev.output_port(0x1, 512, Transfer.BULK)
-
-        m.d.comb += rgb_out.connect(rgb_ep.sink)
+        m.submodules.blinker = blinker = RgbBlinker(pins=platform.request("rgb_led", 0))
+        usb_dev.add_endpoint(blinker.ep_out, addr=1, dir="o")
 
         return m
 

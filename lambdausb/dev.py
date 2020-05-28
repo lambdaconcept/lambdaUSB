@@ -2,11 +2,8 @@ from collections import OrderedDict
 
 from nmigen import *
 
-from .lib import stream
 from .ctl import USBController
-from .buf import USBOutputBuffer, USBInputBuffer
-from .conn import USBOutputArbiter, USBInputArbiter
-from .protocol import Transfer
+from .mux import InputMultiplexer, OutputMultiplexer
 
 
 __all__ = ["USBDevice"]
@@ -14,77 +11,50 @@ __all__ = ["USBDevice"]
 
 class USBDevice(Elaboratable):
     def __init__(self, phy):
-        self.phy        = phy
-        self._input_map = OrderedDict()
-        self._output_map  = OrderedDict()
+        self.phy = phy
+        self._mux_in  = InputMultiplexer()
+        self._mux_out = OutputMultiplexer()
 
-    def input_port(self, ep_addr, max_size, xfer_type):
-        if not isinstance(ep_addr, int) or not ep_addr in range(0, 16):
-            raise TypeError("Endpoint address must be an integer in [0..16), not '{!r}'"
-                            .format(ep_addr))
-        if ep_addr in self._input_map:
-            raise ValueError("An input port for endpoint {} has already been requested"
-                             .format(ep_addr))
-        if not isinstance(max_size, int) or not max_size in range(0, 513):
-            raise TypeError("Maximum packet size must be an integer in [0..512], not '{!r}'"
-                            .format(max_size))
-        if not isinstance(xfer_type, Transfer):
-            raise TypeError("Transfer type must be a member of the Transfer enum, not '{!r}'"
-                            .format(xfer_type))
-
-        if xfer_type == Transfer.CONTROL:
-            port = stream.Endpoint([("empty", 1), ("data", 8)])
-        else:
-            port = stream.Endpoint([("data", 8)])
-        self._input_map[ep_addr] = port, max_size, xfer_type
-        return port
-
-    def output_port(self, ep_addr, max_size, xfer_type):
-        if not isinstance(ep_addr, int) or not ep_addr in range(0, 16):
-            raise TypeError("Endpoint address must be an integer in [0..16), not '{!r}'"
-                            .format(ep_addr))
-        if ep_addr in self._output_map:
-            raise ValueError("An output port for endpoint {} has already been requested"
-                             .format(ep_addr))
-        if not isinstance(max_size, int) or not max_size in range(0, 513):
-            raise TypeError("Maximum packet size must be an integer in [0..512], not '{!r}'"
-                            .format(max_size))
-        if not isinstance(xfer_type, Transfer):
-            raise TypeError("Transfer type must be a member of the Transfer enum, not '{!r}'"
-                            .format(xfer_type))
-
-        if xfer_type == Transfer.CONTROL:
-            port = stream.Endpoint([("setup", 1), ("data", 8)])
-        else:
-            port = stream.Endpoint([("data", 8)])
-        self._output_map[ep_addr] = port, max_size, xfer_type
-        return port
+    def add_endpoint(self, ep, *, addr, dir, buffered=False):
+        if dir not in ("i", "o"):
+            raise ValueError("Endpoint direction must be 'i' or 'o', not {!r}"
+                             .format(dir))
+        if dir == "i":
+            self._mux_in .add_endpoint(ep, addr=addr, buffered=buffered)
+        if dir == "o":
+            self._mux_out.add_endpoint(ep, addr=addr, buffered=buffered)
 
     def elaborate(self, platform):
         m = Module()
 
-        controller = m.submodules.controller = USBController(self.phy)
-        i_arbiter  = m.submodules.i_arbiter  = USBInputArbiter(self._input_map)
-        i_buffer   = m.submodules.i_buffer   = USBInputBuffer(self._input_map)
-        o_arbiter  = m.submodules.o_arbiter  = USBOutputArbiter(self._output_map)
-        o_buffer   = m.submodules.o_buffer   = USBOutputBuffer(self._output_map)
+        m.submodules.ctrl = ctrl = USBController(self.phy)
+        m.submodules.mux_in  = mux_in  = self._mux_in
+        m.submodules.mux_out = mux_out = self._mux_out
 
         m.d.comb += [
-            # phy -> controller -> o_buffer -> o_arbiter -> endpoints
-            controller.source_write.connect(o_buffer.sink_write),
-            controller.source_data.connect(o_buffer.sink_data),
-            controller.write_xfer.eq(o_buffer.write_xfer),
-            o_buffer.recv_zlp.eq(controller.host_zlp),
-            o_arbiter.sink_read.connect(o_buffer.source_read),
-            o_buffer.source_data.connect(o_arbiter.sink_data),
+            mux_out.cmd.stb.eq(ctrl.source_write.valid),
+            mux_out.cmd.addr.eq(ctrl.source_write.ep),
+            ctrl.source_write.ready.eq(mux_out.cmd.rdy),
+            ctrl.write_xfer.eq(mux_out.cmd.xfer),
 
-            # endpoints -> i_arbiter -> i_buffer -> controller -> phy
-            i_arbiter.source_write.connect(i_buffer.sink_write),
-            i_arbiter.source_data.connect(i_buffer.sink_data),
-            controller.sink_read.connect(i_buffer.source_read),
-            i_buffer.source_data.connect(controller.sink_data),
-            controller.read_xfer.eq(i_buffer.read_xfer),
-            i_buffer.recv_ack.eq(controller.host_ack)
+            mux_out.pkt.stb.eq(ctrl.source_data.valid),
+            mux_out.pkt.lst.eq(ctrl.source_data.last),
+            mux_out.pkt.data.eq(ctrl.source_data.data),
+            mux_out.pkt.setup.eq(ctrl.source_data.setup),
+            mux_out.pkt.drop.eq(~ctrl.source_data.crc_ok),
+            ctrl.source_data.ready.eq(mux_out.pkt.rdy),
+
+            mux_in.cmd.stb.eq(ctrl.sink_read.valid),
+            mux_in.cmd.addr.eq(ctrl.sink_read.ep),
+            ctrl.sink_read.ready.eq(mux_in.cmd.rdy),
+            ctrl.read_xfer.eq(mux_in.cmd.xfer),
+
+            ctrl.sink_data.valid.eq(mux_in.pkt.stb),
+            ctrl.sink_data.last.eq(mux_in.pkt.lst),
+            ctrl.sink_data.data.eq(mux_in.pkt.data),
+            ctrl.sink_data.empty.eq(mux_in.pkt.zlp),
+            mux_in.pkt.rdy.eq(ctrl.sink_data.ready),
+            mux_in.pkt.ack.eq(ctrl.host_ack),
         ]
 
         return m

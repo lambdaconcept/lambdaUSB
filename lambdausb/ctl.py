@@ -2,8 +2,8 @@ from nmigen import *
 
 from .lib import stream
 from .crc import *
-from .buf import USBInputBuffer, USBOutputBuffer
 from .protocol import *
+from .endpoint import Transfer
 
 
 __all__ = ["USBController"]
