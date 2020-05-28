@@ -2,14 +2,14 @@ from collections import OrderedDict
 
 from nmigen import *
 
-from .ctl import USBController
+from .ctl import Controller
 from .mux import InputMultiplexer, OutputMultiplexer
 
 
-__all__ = ["USBDevice"]
+__all__ = ["Device"]
 
 
-class USBDevice(Elaboratable):
+class Device(Elaboratable):
     def __init__(self, phy):
         self.phy = phy
         self._mux_in  = InputMultiplexer()
@@ -27,7 +27,7 @@ class USBDevice(Elaboratable):
     def elaborate(self, platform):
         m = Module()
 
-        m.submodules.ctrl = ctrl = USBController(self.phy)
+        m.submodules.ctrl = ctrl = Controller(self.phy)
         m.submodules.mux_in  = mux_in  = self._mux_in
         m.submodules.mux_out = mux_out = self._mux_out
 

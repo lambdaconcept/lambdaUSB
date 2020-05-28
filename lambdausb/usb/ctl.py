@@ -1,15 +1,15 @@
 from nmigen import *
 
-from .lib import stream
+from ..lib import stream
 from .crc import *
-from .protocol import *
+from .defs import *
 from .endpoint import Transfer
 
 
-__all__ = ["USBController"]
+__all__ = ["Controller"]
 
 
-class USBController(Elaboratable):
+class Controller(Elaboratable):
     def __init__(self, phy):
         self.phy          = phy
 

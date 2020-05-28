@@ -1,14 +1,13 @@
 from nmigen import *
 
-from lambdausb.cfg import ConfigurationFSM
-from lambdausb.dev import USBDevice
+from lambdausb import usb
+from lambdausb.usb.config import ConfigurationFSM
 from lambdausb.phy import ulpi
-from lambdausb.endpoint import *
 
 
 class RgbBlinker(Elaboratable):
     def __init__(self, pins):
-        self.ep_out = OutputEndpoint(xfer=Transfer.BULK, max_size=512)
+        self.ep_out = usb.OutputEndpoint(xfer=usb.Transfer.BULK, max_size=512)
         self._pins  = pins
 
     def elaborate(self, platform):
@@ -44,7 +43,7 @@ class USBBlinker(Elaboratable):
 
         # USB device
         m.submodules.ulpi_phy = ulpi_phy = ulpi.PHY(pins=platform.request("ulpi", 0))
-        m.submodules.usb_dev  = usb_dev  = USBDevice(ulpi_phy)
+        m.submodules.usb_dev  = usb_dev  = usb.Device(ulpi_phy)
 
         # Configuration endpoint
         from config import descriptor_map, rom_init
