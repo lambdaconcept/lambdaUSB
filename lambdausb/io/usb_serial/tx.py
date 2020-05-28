@@ -1,10 +1,10 @@
 from nmigen import *
 
 from ...lib import stream
-from ...protocol import LineState
+from ...usb.defs import LineState
 
 
-__all__ = ["NRZIEncoder", "USBPHYTX"]
+__all__ = ["NRZIEncoder", "PHY"]
 
 
 class NRZIEncoder(Elaboratable):
@@ -72,7 +72,7 @@ class NRZIEncoder(Elaboratable):
         return m
 
 
-class USBPHYTX(Elaboratable):
+class PHY(Elaboratable):
     def __init__(self, sync_freq):
         self.sync_freq = sync_freq
         self.sink      = stream.Endpoint([("data", 8)])

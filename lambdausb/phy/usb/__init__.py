@@ -1,1 +1,0 @@
-from .phy import USBPHY

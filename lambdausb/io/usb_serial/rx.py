@@ -2,10 +2,10 @@ from nmigen import *
 from nmigen.lib.coding import Encoder
 
 from ...lib import stream
-from ...protocol import LineState
+from ...usb.defs import LineState
 
 
-__all__ = ["NRZIDecoder", "USBPHYRX"]
+__all__ = ["NRZIDecoder", "PHY"]
 
 
 class NRZIDecoder(Elaboratable):
@@ -69,7 +69,7 @@ class NRZIDecoder(Elaboratable):
         return m
 
 
-class USBPHYRX(Elaboratable):
+class PHY(Elaboratable):
     def __init__(self, sync_freq):
         self.sync_freq = sync_freq
         self.din       = Signal(2)

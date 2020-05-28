@@ -1,4 +1,5 @@
 from nmigen import *
+from nmigen.hdl.rec import *
 
 from ..lib import stream
 
@@ -8,8 +9,18 @@ __all__ = ["PHY", "Transceiver"]
 
 class PHY(Elaboratable):
     def __init__(self, *, pins, rx_depth=32, tx_depth=32):
-        self.sink   = stream.Endpoint([("data", 8)])
-        self.source = stream.Endpoint([("data", 8)])
+        self.rx = Record([
+            ("stb",  1, DIR_FANOUT),
+            ("lst",  1, DIR_FANOUT),
+            ("data", 8, DIR_FANOUT),
+            ("rdy",  1, DIR_FANIN),
+        ])
+        self.tx = Record([
+            ("stb",  1, DIR_FANIN),
+            ("lst",  1, DIR_FANIN),
+            ("data", 8, DIR_FANIN),
+            ("rdy",  1, DIR_FANOUT),
+        ])
 
         self.rx_depth = rx_depth
         self.tx_depth = tx_depth
@@ -31,9 +42,17 @@ class PHY(Elaboratable):
         m.submodules.sender = sender = _Sender()
 
         m.d.comb += [
+            self.rx.stb.eq(rx_fifo.source.valid),
+            self.rx.lst.eq(rx_fifo.source.last),
+            self.rx.data.eq(rx_fifo.source.data),
+            rx_fifo.source.ready.eq(self.rx.rdy),
+
+            tx_fifo.sink.valid.eq(self.tx.stb),
+            tx_fifo.sink.last.eq(self.tx.lst),
+            tx_fifo.sink.data.eq(self.tx.data),
+            self.tx.rdy.eq(tx_fifo.sink.ready),
+
             splitter.source.connect(rx_fifo.sink),
-            rx_fifo.source.connect(self.source),
-            self.sink.connect(tx_fifo.sink),
             tx_fifo.source.connect(sender.sink),
         ]
 
