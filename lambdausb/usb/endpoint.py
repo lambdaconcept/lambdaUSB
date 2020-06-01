@@ -39,6 +39,8 @@ class _Endpoint(Record):
 
         super().__init__(layout, name=name, src_loc_at=1 + src_loc_at)
 
+    __hash__ = object.__hash__
+
 
 class InputEndpoint(_Endpoint):
     def __init__(self, *, xfer, max_size, name=None, src_loc_at=0):

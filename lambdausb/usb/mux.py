@@ -146,11 +146,12 @@ class InputMultiplexer(Elaboratable):
         ])
         self.sof = Signal()
 
-        self._ep_map = OrderedDict()
+        self._ep_map   = OrderedDict()
+        self._addr_map = OrderedDict()
 
-    def add_endpoint(self, ep, *, addr, buffered=True):
+    def add_endpoint(self, ep, *, addr, buffered=False):
         if not isinstance(ep, InputEndpoint):
-            raise ValueError("Endpoint must be an InputEndpoint, not {!r}"
+            raise TypeError("Endpoint must be an InputEndpoint, not {!r}"
                              .format(ep))
         if not isinstance(addr, int):
             raise TypeError("Endpoint address must be an integer, not {!r}"
@@ -159,9 +160,16 @@ class InputMultiplexer(Elaboratable):
             raise ValueError("Endpoint address must be between 0 and 15, not {}"
                              .format(addr))
         if addr in self._ep_map:
-            raise ValueError("Endpoint address {} has already been allocated"
+            raise ValueError("Endpoint address {} has already been assigned"
                              .format(addr))
+        if ep in self._addr_map:
+            raise ValueError("Endpoint {!r} has already been added at address {}"
+                             .format(ep, self._addr_map[ep]))
+        if addr == 0 and ep.xfer is not Transfer.CONTROL:
+            raise ValueError("Invalid transfer type {} for endpoint 0; must be CONTROL"
+                             .format(Transfer(ep.xfer).name))
         self._ep_map[addr] = ep, buffered
+        self._addr_map[ep] = addr
 
     def elaborate(self, platform):
         m = Module()
@@ -172,7 +180,7 @@ class InputMultiplexer(Elaboratable):
             port = port_map[addr]
             if buffered:
                 dbuf = DoubleBuffer(depth=ep.max_size, width=port.data.width + port.zlp.width,
-                                    read_ack=True)
+                                    read_ack=ep.xfer is not Transfer.ISOCHRONOUS)
                 m.submodules["dbuf_{}".format(addr)] = dbuf
                 m.d.comb += [
                     dbuf.w_stb.eq(ep.stb),
@@ -236,11 +244,12 @@ class OutputMultiplexer(Elaboratable):
         ])
         self.sof = Signal()
 
-        self._ep_map = OrderedDict()
+        self._ep_map   = OrderedDict()
+        self._addr_map = OrderedDict()
 
-    def add_endpoint(self, ep, *, addr, buffered=True):
+    def add_endpoint(self, ep, *, addr, buffered=False):
         if not isinstance(ep, OutputEndpoint):
-            raise ValueError("Endpoint must be an OutputEndpoint, not '{!r}'"
+            raise TypeError("Endpoint must be an OutputEndpoint, not {!r}"
                              .format(ep))
         if not isinstance(addr, int):
             raise TypeError("Endpoint address must be an integer, not {!r}"
@@ -249,9 +258,16 @@ class OutputMultiplexer(Elaboratable):
             raise ValueError("Endpoint address must be between 0 and 15, not {}"
                              .format(addr))
         if addr in self._ep_map:
-            raise ValueError("Endpoint address {} has already been allocated"
+            raise ValueError("Endpoint address {} has already been assigned"
                              .format(addr))
+        if ep in self._addr_map:
+            raise ValueError("Endpoint {!r} has already been added at address {}"
+                             .format(ep, self._addr_map[ep]))
+        if addr == 0 and ep.xfer is not Transfer.CONTROL:
+            raise ValueError("Invalid transfer type {} for endpoint 0; must be CONTROL"
+                             .format(Transfer(ep.xfer).name))
         self._ep_map[addr] = ep, buffered
+        self._addr_map[ep] = addr
 
     def elaborate(self, platform):
         m = Module()
