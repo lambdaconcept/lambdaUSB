@@ -60,7 +60,7 @@ class OutputEndpoint(_Endpoint):
             ("stb",   1, DIR_FANIN),
             ("lst",   1, DIR_FANIN),
             ("data",  8, DIR_FANIN),
-            ("setup", 1, DIR_FANIN),
+            ("setup", 1 if xfer is Transfer.CONTROL else 0, DIR_FANIN),
             ("drop",  1, DIR_FANIN),
             ("rdy",   1, DIR_FANOUT),
             ("sof",   1, DIR_FANIN),
