@@ -31,7 +31,7 @@ class DoubleBufferTestCase(unittest.TestCase):
         yield
         return data
 
-    def test_simple(self):
+    def test_rw_simple(self):
         dut = DoubleBuffer(depth=64, width=8)
 
         def process():
@@ -56,6 +56,66 @@ class DoubleBufferTestCase(unittest.TestCase):
             yield dut.r_rdy.eq(0)
             yield
             self.assertFalse((yield dut.r_stb))
+
+        simulation_test(dut, process)
+
+    def test_w_bank_overflow(self):
+        dut = DoubleBuffer(depth=1, width=8)
+
+        def process():
+            self.assertEqual((yield dut.w_rdy), 1)
+            yield dut.w_stb.eq(1)
+            yield dut.w_data.eq(0xaa)
+            yield
+            self.assertEqual((yield dut.w_rdy), 1)
+            yield dut.w_stb.eq(1)
+            yield dut.w_lst.eq(1)
+            yield dut.w_data.eq(0xbb)
+            yield
+            yield; yield Delay()
+            self.assertEqual((yield dut.r_stb), 0)
+
+        simulation_test(dut, process)
+
+    def test_w_full(self):
+        dut = DoubleBuffer(depth=1, width=8)
+
+        def process():
+            self.assertEqual((yield dut.w_rdy), 1)
+            self.assertEqual((yield dut.r_stb), 0)
+            yield dut.w_stb.eq(1)
+            yield dut.w_lst.eq(1)
+            yield dut.w_data.eq(0xaa)
+            yield
+            yield; yield Delay()
+            self.assertEqual((yield dut.w_rdy), 1)
+            self.assertEqual((yield dut.r_stb), 1)
+            yield dut.w_stb.eq(1)
+            yield dut.w_lst.eq(1)
+            yield dut.w_data.eq(0xbb)
+            yield
+            yield; yield Delay()
+            self.assertEqual((yield dut.w_rdy), 0)
+            self.assertEqual((yield dut.r_stb), 1)
+
+        simulation_test(dut, process)
+
+    def test_w_drop(self):
+        dut = DoubleBuffer(depth=2, width=8)
+
+        def process():
+            self.assertEqual((yield dut.w_rdy), 1)
+            yield dut.w_stb.eq(1)
+            yield dut.w_data.eq(0xaa)
+            yield
+            self.assertEqual((yield dut.w_rdy), 1)
+            yield dut.w_stb.eq(1)
+            yield dut.w_lst.eq(1)
+            yield dut.w_drop.eq(1)
+            yield dut.w_data.eq(0xbb)
+            yield
+            yield; yield Delay()
+            self.assertEqual((yield dut.r_stb), 0)
 
         simulation_test(dut, process)
 

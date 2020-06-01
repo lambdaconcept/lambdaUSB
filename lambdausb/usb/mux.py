@@ -51,7 +51,13 @@ class DoubleBuffer(Elaboratable):
 
         bank_lru = Signal()
 
-        with m.FSM() as write_fsm:
+        with m.FSM(reset="WRITE-0") as write_fsm:
+            with m.State("WAIT"):
+                with m.If(~banks[0].valid):
+                    m.next = "WRITE-0"
+                with m.Elif(~banks[1].valid):
+                    m.next = "WRITE-1"
+
             for i, bank in enumerate(banks):
                 with m.State("WRITE-{}".format(i)):
                     w_addr_inc = Signal.like(bank.w_addr, name_suffix="_inc")
@@ -62,11 +68,7 @@ class DoubleBuffer(Elaboratable):
                         bank.w_data.eq(self.w_data),
                     ]
                     with m.If(self.w_stb):
-                        with m.If(w_addr_inc == self.depth):
-                            # Overflow. Flush remaining bytes.
-                            m.d.sync += bank.w_addr.eq(0)
-                            m.next = "FLUSH"
-                        with m.Elif(self.w_lst):
+                        with m.If(self.w_lst):
                             m.d.sync += bank.w_addr.eq(0)
                             m.next = "WAIT"
                             with m.If(~self.w_drop):
@@ -75,6 +77,10 @@ class DoubleBuffer(Elaboratable):
                                     bank.level.eq(w_addr_inc),
                                     bank_lru.eq(1 - i),
                                 ]
+                        with m.Elif(w_addr_inc == self.depth):
+                            # Overflow. Flush remaining bytes.
+                            m.d.sync += bank.w_addr.eq(0)
+                            m.next = "FLUSH"
                         with m.Else():
                             m.d.sync += bank.w_addr.eq(w_addr_inc)
 
@@ -83,29 +89,26 @@ class DoubleBuffer(Elaboratable):
                 with m.If(self.w_stb & self.w_lst):
                     m.next = "WAIT"
 
-            with m.State("WAIT"):
-                with m.If(~banks[0].valid):
-                    m.next = "WRITE-0"
-                with m.Elif(~banks[1].valid):
-                    m.next = "WRITE-1"
-
         with m.FSM() as read_fsm:
             with m.State("WAIT"):
                 with m.If(banks[0].valid & ~(banks[1].valid & bank_lru)):
                     m.d.comb += banks[0].r_en.eq(1)
                     m.d.sync += banks[0].r_addr.eq(1)
+                    m.d.sync += self.r_lst.eq(banks[0].level == 1)
                     m.next = "READ-0"
                 with m.Elif(banks[1].valid):
                     m.d.comb += banks[1].r_en.eq(1)
                     m.d.sync += banks[1].r_addr.eq(1)
+                    m.d.sync += self.r_lst.eq(banks[1].level == 1)
                     m.next = "READ-1"
 
             for i, bank in enumerate(banks):
                 with m.State("READ-{}".format(i)):
+                    r_addr_inc = Signal.like(bank.r_addr, name_suffix="_inc")
+                    m.d.comb += r_addr_inc.eq(bank.r_addr + 1)
                     m.d.comb += [
                         self.r_stb.eq(1),
                         self.r_data.eq(bank.r_data),
-                        self.r_lst.eq(bank.r_addr == bank.level),
                     ]
                     with m.If(self.r_rdy):
                         r_done = self.r_ack if self.read_ack else self.r_lst
@@ -115,7 +118,12 @@ class DoubleBuffer(Elaboratable):
                             m.next = "WAIT"
                         with m.Else():
                             m.d.comb += bank.r_en.eq(1)
-                            m.d.sync += bank.r_addr.eq(Mux(self.r_lst, 0, bank.r_addr + 1))
+                            with m.If(r_addr_inc == bank.level):
+                                m.d.sync += bank.r_addr.eq(0)
+                                m.d.sync += self.r_lst.eq(1)
+                            with m.Else():
+                                m.d.sync += bank.r_addr.eq(r_addr_inc)
+                                m.d.sync += self.r_lst.eq(0)
 
         return m
 
