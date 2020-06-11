@@ -580,3 +580,20 @@ class OutputMultiplexerTestCase(unittest.TestCase):
             self.assertEqual((yield ep.stb), 0)
 
         simulation_test(dut, process)
+
+    def test_sof_broadcast(self):
+        dut = OutputMultiplexer()
+        ep0 = OutputEndpoint(xfer=Transfer.CONTROL,     max_size=1)
+        ep1 = OutputEndpoint(xfer=Transfer.ISOCHRONOUS, max_size=1)
+        dut.add_endpoint(ep0, addr=0)
+        dut.add_endpoint(ep1, addr=1)
+
+        def process():
+            self.assertEqual((yield ep0.sof), 0)
+            self.assertEqual((yield ep1.sof), 0)
+            yield dut.sof.eq(1)
+            yield Delay()
+            self.assertEqual((yield ep0.sof), 1)
+            self.assertEqual((yield ep1.sof), 1)
+
+        simulation_test(dut, process, sync=False)
