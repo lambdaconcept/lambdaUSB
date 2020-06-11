@@ -130,11 +130,10 @@ class DoubleBuffer(Elaboratable):
 
 class InputMultiplexer(Elaboratable):
     def __init__(self):
-        self.cmd = Record([
-            ("stb",  1, DIR_FANIN),
+        self.sel = Record([
             ("addr", 4, DIR_FANIN),
-            ("rdy",  1, DIR_FANOUT),
             ("xfer", 2, DIR_FANOUT),
+            ("err",  1, DIR_FANOUT),
         ])
         self.pkt = Record([
             ("stb",  1, DIR_FANOUT),
@@ -205,34 +204,27 @@ class InputMultiplexer(Elaboratable):
                 ]
             m.d.comb += ep.sof.eq(self.sof)
 
-        with m.Switch(self.cmd.addr):
+        with m.Switch(self.sel.addr):
             for addr, port in port_map.items():
                 ep, _ = self._ep_map[addr]
                 with m.Case(addr):
                     m.d.comb += [
-                        self.cmd.rdy.eq(port.stb),
-                        self.cmd.xfer.eq(ep.xfer),
+                        self.sel.xfer.eq(ep.xfer),
+                        port.connect(self.pkt),
                     ]
-
-        port_addr = Signal.like(self.cmd.addr)
-        with m.If(self.cmd.stb & self.cmd.rdy):
-            m.d.sync += port_addr.eq(self.cmd.addr)
-
-        with m.Switch(port_addr):
-            for addr, port in port_map.items():
-                with m.Case(addr):
-                    m.d.comb += port.connect(self.pkt)
+            with m.Default():
+                # Unknown endpoint.
+                m.d.comb += self.sel.err.eq(1)
 
         return m
 
 
 class OutputMultiplexer(Elaboratable):
     def __init__(self):
-        self.cmd = Record([
-            ("stb",  1, DIR_FANIN),
+        self.sel = Record([
             ("addr", 4, DIR_FANIN),
-            ("rdy",  1, DIR_FANOUT),
             ("xfer", 2, DIR_FANOUT),
+            ("err",  1, DIR_FANOUT),
         ])
         self.pkt = Record([
             ("stb",   1, DIR_FANIN),
@@ -305,22 +297,16 @@ class OutputMultiplexer(Elaboratable):
                 ]
             m.d.comb += ep.sof.eq(self.sof)
 
-        with m.Switch(self.cmd.addr):
+        with m.Switch(self.sel.addr):
             for addr, port in port_map.items():
                 ep, _ = self._ep_map[addr]
                 with m.Case(addr):
                     m.d.comb += [
-                        self.cmd.rdy.eq(port.rdy),
-                        self.cmd.xfer.eq(ep.xfer),
+                        self.sel.xfer.eq(ep.xfer),
+                        port.connect(self.pkt),
                     ]
-
-        port_addr = Signal.like(self.cmd.addr)
-        with m.If(self.cmd.stb & self.cmd.rdy):
-            m.d.sync += port_addr.eq(self.cmd.addr)
-
-        with m.Switch(port_addr):
-            for addr, port in port_map.items():
-                with m.Case(addr):
-                    m.d.comb += port.connect(self.pkt)
+            with m.Default():
+                # Unknown endpoint.
+                m.d.comb += self.sel.err.eq(1)
 
         return m

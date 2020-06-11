@@ -195,7 +195,6 @@ class InputMultiplexerTestCase(unittest.TestCase):
         dut.add_endpoint(ep1, addr=1)
 
         def process():
-            self.assertEqual((yield dut.cmd.rdy), 0)
             self.assertEqual((yield dut.pkt.stb), 0)
             self.assertEqual((yield ep0.rdy), 0)
             self.assertEqual((yield ep1.rdy), 0)
@@ -211,15 +210,10 @@ class InputMultiplexerTestCase(unittest.TestCase):
 
             # Endpoint 0
 
-            yield dut.cmd.stb.eq(1)
-            yield dut.cmd.addr.eq(0)
+            yield dut.sel.addr.eq(0)
             yield Delay()
-            self.assertEqual((yield dut.cmd.rdy), 1)
-            self.assertEqual((yield dut.cmd.xfer), Transfer.CONTROL)
-            yield
-
-            yield dut.cmd.stb.eq(0)
-            yield
+            self.assertEqual((yield dut.sel.err), 0)
+            self.assertEqual((yield dut.sel.xfer), Transfer.CONTROL)
 
             self.assertEqual((yield dut.pkt.stb), 1)
             self.assertEqual((yield dut.pkt.lst), 1)
@@ -230,22 +224,16 @@ class InputMultiplexerTestCase(unittest.TestCase):
             yield Delay()
             self.assertEqual((yield ep0.rdy), 1)
             self.assertEqual((yield ep0.ack), 1)
-            yield
 
             yield dut.pkt.rdy.eq(0)
             yield dut.pkt.ack.eq(0)
 
             # Endpoint 1
 
-            yield dut.cmd.stb.eq(1)
-            yield dut.cmd.addr.eq(1)
+            yield dut.sel.addr.eq(1)
             yield Delay()
-            self.assertEqual((yield dut.cmd.rdy), 1)
-            self.assertEqual((yield dut.cmd.xfer), Transfer.BULK)
-            yield
-
-            yield dut.cmd.stb.eq(0)
-            yield
+            self.assertEqual((yield dut.sel.err), 0)
+            self.assertEqual((yield dut.sel.xfer), Transfer.BULK)
 
             self.assertEqual((yield dut.pkt.stb), 1)
             self.assertEqual((yield dut.pkt.lst), 0)
@@ -256,19 +244,17 @@ class InputMultiplexerTestCase(unittest.TestCase):
             yield Delay()
             self.assertEqual((yield ep1.rdy), 1)
             self.assertEqual((yield ep1.ack), 1)
-            yield
 
             yield dut.pkt.rdy.eq(0)
             yield dut.pkt.ack.eq(0)
 
             # Unknown endpoint
 
-            yield dut.cmd.stb.eq(1)
-            yield dut.cmd.addr.eq(2)
+            yield dut.sel.addr.eq(2)
             yield Delay()
-            self.assertEqual((yield dut.cmd.rdy), 0)
+            self.assertEqual((yield dut.sel.err), 1)
 
-        simulation_test(dut, process)
+        simulation_test(dut, process, sync=False)
 
     def test_buffered(self):
         dut = InputMultiplexer()
@@ -276,7 +262,6 @@ class InputMultiplexerTestCase(unittest.TestCase):
         dut.add_endpoint(ep, addr=0, buffered=True)
 
         def process():
-            self.assertEqual((yield dut.cmd.rdy), 0)
             self.assertEqual((yield dut.pkt.stb), 0)
 
             # Write first packet
@@ -308,13 +293,9 @@ class InputMultiplexerTestCase(unittest.TestCase):
 
             # Read first packet
 
-            yield dut.cmd.stb.eq(1)
-            yield dut.cmd.addr.eq(0)
+            yield dut.sel.addr.eq(0)
             yield Delay()
-            self.assertEqual((yield dut.cmd.rdy), 1)
-            yield
-
-            yield dut.cmd.stb.eq(0)
+            self.assertEqual((yield dut.sel.err), 0)
             yield
 
             self.assertEqual((yield dut.pkt.stb), 1)
@@ -365,7 +346,6 @@ class InputMultiplexerTestCase(unittest.TestCase):
         dut.add_endpoint(ep, addr=1, buffered=True)
 
         def process():
-            self.assertEqual((yield dut.cmd.rdy), 0)
             self.assertEqual((yield dut.pkt.stb), 0)
 
             # Write packet
@@ -384,13 +364,11 @@ class InputMultiplexerTestCase(unittest.TestCase):
 
             # Read packet
 
-            yield dut.cmd.stb.eq(1)
-            yield dut.cmd.addr.eq(1)
+            yield dut.sel.addr.eq(1)
             yield Delay()
-            self.assertEqual((yield dut.cmd.rdy), 1)
+            self.assertEqual((yield dut.sel.err), 0)
             yield
 
-            yield dut.cmd.stb.eq(0)
             yield dut.pkt.rdy.eq(1)
             yield
 
@@ -423,7 +401,7 @@ class InputMultiplexerTestCase(unittest.TestCase):
             self.assertEqual((yield ep0.sof), 1)
             self.assertEqual((yield ep1.sof), 1)
 
-        simulation_test(dut, process)
+        simulation_test(dut, process, sync=False)
 
 
 class OutputMultiplexerTestCase(unittest.TestCase):
@@ -494,15 +472,10 @@ class OutputMultiplexerTestCase(unittest.TestCase):
 
             # Endpoint 0
 
-            yield dut.cmd.stb.eq(1)
-            yield dut.cmd.addr.eq(0)
+            yield dut.sel.addr.eq(0)
             yield Delay()
-            self.assertEqual((yield dut.cmd.rdy), 1)
-            self.assertEqual((yield dut.cmd.xfer), Transfer.CONTROL)
-            yield
-
-            yield dut.cmd.stb.eq(0)
-            yield
+            self.assertEqual((yield dut.sel.err), 0)
+            self.assertEqual((yield dut.sel.xfer), Transfer.CONTROL)
 
             self.assertEqual((yield ep0.stb), 1)
             self.assertEqual((yield ep0.lst), 1)
@@ -515,15 +488,10 @@ class OutputMultiplexerTestCase(unittest.TestCase):
 
             # Endpoint 1
 
-            yield dut.cmd.stb.eq(1)
-            yield dut.cmd.addr.eq(1)
+            yield dut.sel.addr.eq(1)
             yield Delay()
-            self.assertEqual((yield dut.cmd.rdy), 1)
-            self.assertEqual((yield dut.cmd.xfer), Transfer.BULK)
-            yield
-
-            yield dut.cmd.stb.eq(0)
-            yield
+            self.assertEqual((yield dut.sel.err), 0)
+            self.assertEqual((yield dut.sel.xfer), Transfer.BULK)
 
             self.assertEqual((yield ep1.stb), 1)
             self.assertEqual((yield ep1.lst), 1)
@@ -536,13 +504,11 @@ class OutputMultiplexerTestCase(unittest.TestCase):
 
             # Unknown endpoint
 
-            yield dut.cmd.stb.eq(1)
-            yield dut.cmd.addr.eq(2)
+            yield dut.sel.addr.eq(2)
             yield Delay()
-            self.assertEqual((yield dut.cmd.rdy), 0)
-            yield
+            self.assertEqual((yield dut.sel.err), 1)
 
-        simulation_test(dut, process)
+        simulation_test(dut, process, sync=False)
 
     def test_buffered(self):
         dut = OutputMultiplexer()
@@ -550,13 +516,9 @@ class OutputMultiplexerTestCase(unittest.TestCase):
         dut.add_endpoint(ep, addr=0, buffered=True)
 
         def process():
-            yield dut.cmd.stb.eq(1)
-            yield dut.cmd.addr.eq(0)
+            yield dut.sel.addr.eq(0)
             yield Delay()
-            self.assertEqual((yield dut.cmd.rdy), 1)
-            yield
-
-            yield dut.cmd.stb.eq(0)
+            self.assertEqual((yield dut.sel.err), 0)
             yield
 
             # Write first packet

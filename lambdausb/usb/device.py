@@ -87,7 +87,7 @@ class Device(Elaboratable):
         rx_dev = Signal(8)
         rx_token_lsb = Signal(8)
         rx_setup = Signal()
-        rx_xfer = Signal.like(mux_out.cmd.xfer)
+        rx_xfer = Signal.like(mux_out.sel.xfer)
 
         rx_sof = Signal()
         rx_frame_no = Signal(11)
@@ -172,8 +172,8 @@ class Device(Elaboratable):
                         m.next = "IDLE"
 
             with m.State("SEND-PONG"):
-                m.d.comb += mux_out.cmd.addr.eq(rx_ep)
-                with m.If(mux_out.cmd.rdy):
+                m.d.comb += mux_out.sel.addr.eq(rx_ep)
+                with m.If(mux_out.pkt.rdy):
                     m.d.comb += self.tx.data.eq(pid_from(Packet.HANDSHAKE, Handshake.ACK))
                 with m.Else():
                     m.d.comb += self.tx.data.eq(pid_from(Packet.HANDSHAKE, Handshake.NAK))
@@ -186,16 +186,15 @@ class Device(Elaboratable):
 
             with m.State("RECEIVE-DATA-0"):
                 m.d.comb += [
-                    mux_out.cmd.stb.eq(1),
-                    mux_out.cmd.addr.eq(rx_ep),
+                    mux_out.sel.addr.eq(rx_ep),
                 ]
-                with m.If(~mux_out.cmd.rdy):
-                    with m.If(mux_out.cmd.xfer == Transfer.ISOCHRONOUS):
+                with m.If(~mux_out.pkt.rdy):
+                    with m.If(mux_out.sel.xfer == Transfer.ISOCHRONOUS):
                         m.next = "IDLE"
                     with m.Else():
                         m.next = "SEND-NAK"
                 with m.Else():
-                    m.d.sync += rx_xfer.eq(mux_out.cmd.xfer)
+                    m.d.sync += rx_xfer.eq(mux_out.sel.xfer)
                     m.next = "RECEIVE-DATA-1"
 
             with m.State("RECEIVE-DATA-1"):
@@ -255,11 +254,10 @@ class Device(Elaboratable):
 
             with m.State("SEND-DATA-0"):
                 m.d.comb += [
-                    mux_in.cmd.stb.eq(1),
-                    mux_in.cmd.addr.eq(rx_ep),
+                    mux_in.sel.addr.eq(rx_ep),
                 ]
-                with m.If(~mux_in.cmd.rdy):
-                    with m.If(mux_in.cmd.xfer == Transfer.ISOCHRONOUS):
+                with m.If(~mux_in.pkt.rdy):
+                    with m.If(mux_in.sel.xfer == Transfer.ISOCHRONOUS):
                         m.next = "IDLE"
                     with m.Else():
                         m.next = "SEND-NAK"
