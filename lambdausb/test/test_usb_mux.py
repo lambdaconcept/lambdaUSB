@@ -461,7 +461,7 @@ class OutputMultiplexerTestCase(unittest.TestCase):
         ep  = OutputEndpoint(xfer=Transfer.CONTROL, max_size=64)
         dut.add_endpoint(ep, addr=0)
         with self.assertRaisesRegex(ValueError,
-                r"Endpoint \(rec ep stb lst data setup drop rdy sof\) has already been added at "
+                r"Endpoint \(rec ep rdy stb lst data zlp setup drop sof\) has already been added at "
                 r"address 0"):
             dut.add_endpoint(ep, addr=1)
 
@@ -486,6 +486,7 @@ class OutputMultiplexerTestCase(unittest.TestCase):
             yield dut.pkt.stb.eq(1)
             yield dut.pkt.lst.eq(1)
             yield dut.pkt.setup.eq(1)
+            yield dut.pkt.zlp.eq(1)
             yield dut.pkt.data.eq(0xff)
             yield dut.pkt.drop.eq(1)
             yield ep0.rdy.eq(1)
@@ -506,6 +507,7 @@ class OutputMultiplexerTestCase(unittest.TestCase):
             self.assertEqual((yield ep0.stb), 1)
             self.assertEqual((yield ep0.lst), 1)
             self.assertEqual((yield ep0.setup), 1)
+            self.assertEqual((yield ep0.zlp), 1)
             self.assertEqual((yield ep0.data), 0xff)
             self.assertEqual((yield ep0.drop), 1)
             self.assertEqual((yield ep1.stb), 0)
@@ -526,6 +528,7 @@ class OutputMultiplexerTestCase(unittest.TestCase):
             self.assertEqual((yield ep1.stb), 1)
             self.assertEqual((yield ep1.lst), 1)
             self.assertEqual((yield ep1.setup), 0)
+            self.assertEqual((yield ep1.zlp), 1)
             self.assertEqual((yield ep1.data), 0xff)
             self.assertEqual((yield ep1.drop), 1)
             self.assertEqual((yield ep0.stb), 0)
@@ -562,6 +565,7 @@ class OutputMultiplexerTestCase(unittest.TestCase):
             yield dut.pkt.stb.eq(1)
             yield dut.pkt.lst.eq(1)
             yield dut.pkt.setup.eq(1)
+            yield dut.pkt.zlp.eq(1)
             yield dut.pkt.data.eq(0xff)
             yield; yield Delay()
 
@@ -573,6 +577,7 @@ class OutputMultiplexerTestCase(unittest.TestCase):
             self.assertEqual((yield dut.pkt.rdy), 1)
             yield dut.pkt.lst.eq(0)
             yield dut.pkt.setup.eq(0)
+            yield dut.pkt.zlp.eq(0)
             yield dut.pkt.data.eq(0xaa)
             yield; yield Delay()
             self.assertEqual((yield dut.pkt.rdy), 1)
@@ -589,6 +594,7 @@ class OutputMultiplexerTestCase(unittest.TestCase):
             self.assertEqual((yield ep.stb), 1)
             self.assertEqual((yield ep.lst), 1)
             self.assertEqual((yield ep.setup), 1)
+            self.assertEqual((yield ep.zlp), 1)
             self.assertEqual((yield ep.data), 0xff)
             yield ep.rdy.eq(1)
             yield
@@ -600,11 +606,13 @@ class OutputMultiplexerTestCase(unittest.TestCase):
             self.assertEqual((yield ep.stb), 1)
             self.assertEqual((yield ep.lst), 0)
             self.assertEqual((yield ep.setup), 0)
+            self.assertEqual((yield ep.zlp), 0)
             self.assertEqual((yield ep.data), 0xaa)
             yield
             self.assertEqual((yield ep.stb), 1)
             self.assertEqual((yield ep.lst), 1)
             self.assertEqual((yield ep.setup), 0)
+            self.assertEqual((yield ep.zlp), 0)
             self.assertEqual((yield ep.data), 0xbb)
             yield
             self.assertEqual((yield ep.stb), 0)

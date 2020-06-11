@@ -238,6 +238,7 @@ class OutputMultiplexer(Elaboratable):
             ("stb",   1, DIR_FANIN),
             ("lst",   1, DIR_FANIN),
             ("data",  8, DIR_FANIN),
+            ("zlp",   1, DIR_FANIN),
             ("setup", 1, DIR_FANIN),
             ("drop",  1, DIR_FANIN),
             ("rdy",   1, DIR_FANOUT),
@@ -277,18 +278,19 @@ class OutputMultiplexer(Elaboratable):
         for addr, (ep, buffered) in self._ep_map.items():
             port = port_map[addr]
             if buffered:
-                dbuf = DoubleBuffer(depth=ep.max_size, width=port.data.width + port.setup.width)
+                dbuf_w_data = Cat(port.data, port.zlp, port.setup)
+                dbuf = DoubleBuffer(depth=ep.max_size, width=len(dbuf_w_data))
                 m.submodules["dbuf_{}".format(addr)] = dbuf
                 m.d.comb += [
                     dbuf.w_stb.eq(port.stb),
                     dbuf.w_lst.eq(port.lst),
-                    dbuf.w_data.eq(Cat(port.data, port.setup)),
+                    dbuf.w_data.eq(dbuf_w_data),
                     dbuf.w_drop.eq(port.drop),
                     port.rdy.eq(dbuf.w_rdy),
 
                     ep.stb.eq(dbuf.r_stb),
                     ep.lst.eq(dbuf.r_lst),
-                    Cat(ep.data, ep.setup).eq(dbuf.r_data),
+                    Cat(ep.data, ep.zlp, ep.setup).eq(dbuf.r_data),
                     dbuf.r_rdy.eq(ep.rdy),
                 ]
             else:
@@ -296,6 +298,7 @@ class OutputMultiplexer(Elaboratable):
                     ep.stb.eq(port.stb),
                     ep.lst.eq(port.lst),
                     ep.data.eq(port.data),
+                    ep.zlp.eq(port.zlp),
                     ep.setup.eq(port.setup),
                     ep.drop.eq(port.drop),
                     port.rdy.eq(ep.rdy),

@@ -123,6 +123,8 @@ class OutputEndpoint(_Endpoint):
         Read last. Asserted when `data` holds the last byte of the payload.
     data : Signal, in
         Read data.
+    zlp : Signal, in
+        Read zero-length. Asserted when the payload is empty. Valid when `lst` is asserted.
     setup : Signal, in
         Read setup. Asserted when the payload comes from a SETUP packet.
     drop : Signal, in
@@ -138,6 +140,7 @@ class OutputEndpoint(_Endpoint):
             ("stb",   1, DIR_FANIN),
             ("lst",   1, DIR_FANIN),
             ("data",  8, DIR_FANIN),
+            ("zlp",   1, DIR_FANIN),
             ("setup", 1 if xfer is Transfer.CONTROL else 0, DIR_FANIN),
             ("drop",  1, DIR_FANIN),
             ("sof",   1, DIR_FANIN),
