@@ -145,7 +145,7 @@ class Device(Elaboratable):
                     with m.If(~self.rx.lst):
                         # A token packet has 3 bytes. This one has more than 3, ignore it.
                         m.next = "FLUSH"
-                    with m.Elif(crc5.crc == self.rx.data[3:8]):
+                    with m.Elif(crc5.res == self.rx.data[3:8]):
                         m.d.sync += [
                             rx_dev.eq(rx_token_lsb[:-2]),
                             rx_ep.eq(Cat(rx_token_lsb[-1], self.rx.data[:3]))
@@ -225,7 +225,7 @@ class Device(Elaboratable):
                     mux_out.pkt.data.eq(rx_byte_1),
                     mux_out.pkt.setup.eq(rx_setup),
                     mux_out.pkt.lst.eq(self.rx.lst),
-                    mux_out.pkt.drop.eq(crc16.crc != Cat(rx_byte_0, self.rx.data)),
+                    mux_out.pkt.drop.eq(crc16.res != Cat(rx_byte_0, self.rx.data)),
                     crc16.en.eq(mux_out.pkt.stb),
                     crc16.val.eq(mux_out.pkt.data),
                 ]
@@ -287,7 +287,7 @@ class Device(Elaboratable):
                         with m.If(mux_in.pkt.zlp):
                             m.next = "SEND-ZLP"
                         with m.Else():
-                            m.d.sync += tx_crc16.eq(crc16.crc)
+                            m.d.sync += tx_crc16.eq(crc16.res)
                             m.next = "SEND-DATA-3"
 
             with m.State("SEND-DATA-3"):

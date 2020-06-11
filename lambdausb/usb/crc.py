@@ -14,7 +14,7 @@ class CRC(Elaboratable):
         self.clr  = Signal()
         self.en   = Signal()
         self.val  = Signal(dw)
-        self.crc  = Signal(size)
+        self.res  = Signal(size)
 
     def elaborate(self, platform):
         m = Module()
@@ -37,6 +37,6 @@ class CRC(Elaboratable):
         with m.Elif(self.en):
             m.d.sync += crcreg[0].eq(crcreg[self.dw])
 
-        m.d.comb += self.crc.eq(crcreg[self.dw][::-1] ^ self.init)
+        m.d.comb += self.res.eq(crcreg[self.dw][::-1] ^ self.init)
 
         return m

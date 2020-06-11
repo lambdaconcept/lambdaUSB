@@ -41,6 +41,6 @@ class CRCTestCase(unittest.TestCase):
             yield dut.val.eq(0x00)
             yield
 
-            self.assertEqual((yield dut.crc), 0xf4e0)
+            self.assertEqual((yield dut.res), 0xf4e0)
 
-        simulation_test(dut, process)
+        simulation_test(dut, process, sync=True)
