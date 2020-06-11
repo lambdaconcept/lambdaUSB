@@ -75,6 +75,7 @@ from config import descriptor_map, rom_init
 m.submodules.cfg_fsm = cfg_fsm = ConfigurationFSM(descriptor_map, rom_init)
 usb_dev.add_endpoint(cfg_fsm.ep_in,  addr=0)
 usb_dev.add_endpoint(cfg_fsm.ep_out, addr=0)
+m.d.comb += usb_dev.addr.eq(cfg_fsm.dev_addr)
 ```
 
 ### License

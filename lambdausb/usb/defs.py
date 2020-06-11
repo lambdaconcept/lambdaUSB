@@ -1,47 +1,53 @@
-from enum import IntEnum
+import enum
+
+from nmigen import *
 
 
-class Packet(IntEnum):
-    TOKEN     = 0b01
-    DATA      = 0b11
-    HANDSHAKE = 0b10
-    SPECIAL   = 0b00
+class PacketID(enum.IntEnum):
+    OUT   = 0b0001
+    IN    = 0b1001
+    SOF   = 0b0101
+    SETUP = 0b1101
+
+    DATA0 = 0b0011
+    DATA1 = 0b1011
+    DATA2 = 0b0111
+    MDATA = 0b1111
+
+    ACK   = 0b0010
+    NAK   = 0b1010
+    STALL = 0b1110
+    NYET  = 0b0110
+
+    PRE   = 0b1100
+    ERR   = 0b1100
+    SPLIT = 0b1000
+    PING  = 0b0100
+
+    RESERVED = 0
+
+    @staticmethod
+    def is_token(pid):
+        assert isinstance(pid, Value)
+        return pid.matches("--01")
+
+    @staticmethod
+    def is_data(pid):
+        assert isinstance(pid, Value)
+        return pid.matches("--11")
+
+    @staticmethod
+    def is_handshake(pid):
+        assert isinstance(pid, Value)
+        return pid.matches("--10")
+
+    @staticmethod
+    def is_special(pid):
+        assert isinstance(pid, Value)
+        return pid.matches("--00")
 
 
-class Token(IntEnum):
-    OUT   = 0b00
-    IN    = 0b10
-    SOF   = 0b01
-    SETUP = 0b11
-
-
-class Data(IntEnum):
-    DATA0 = 0b00
-    DATA1 = 0b10
-    DATA2 = 0b01
-    MDATA = 0b11
-
-
-class Handshake(IntEnum):
-    ACK   = 0b00
-    NAK   = 0b10
-    STALL = 0b11
-    NYET  = 0b01
-
-
-class Special(IntEnum):
-    PRE   = 0b11
-    ERR   = 0b11
-    SPLIT = 0b10
-    PING  = 0b01
-
-
-def pid_from(pkt, val):
-    v1 = (val << 2) | pkt
-    return ((v1 ^ 0xf) << 4) | v1
-
-
-class LineState(IntEnum):
+class LineState(enum.IntEnum):
     SE0 = 0b00
     J   = 0b01
     K   = 0b10
