@@ -2,15 +2,38 @@ from nmigen import *
 from nmigen.hdl.rec import *
 
 from .crc import CRC
-from .mux import *
 from .defs import *
-from .endpoint import Transfer
+from .endpoint import *
+from .mux import *
 
 
 __all__ = ["Device"]
 
 
 class Device(Elaboratable):
+    """USB 2.0 device controller.
+
+    An USB 2.0 device controller, managing transactions between its endpoints and the host.
+
+    Attributes
+    ----------
+    rx.stb : Signal, in
+        Receive strobe. Asserted by the underlying PHY when it has data to send.
+    rx.lst : Signal, in
+        Receive last. Asserted when `rx.data` holds the last byte of a packet.
+    rx.data : Signal, in
+        Receive data.
+    rx.rdy : Signal, out
+        Receive ready. Asserted when the device is able to receive data.
+    tx.stb : Signal, out
+        Transmit strobe. Asserted by the device when it has data to send.
+    tx.lst : Signal, out
+        Transmit last. Asserted when `tx.data` holds the last byte of a packet.
+    tx.data : Signal, out
+        Transmit data.
+    tx.rdy : Signal, in
+        Transmit ready. Asserted when the underlying PHY is able to receive data.
+    """
     def __init__(self):
         self.rx = Record([
             ("stb",  1, DIR_FANIN),
@@ -28,14 +51,27 @@ class Device(Elaboratable):
         self._mux_in  = InputMultiplexer()
         self._mux_out = OutputMultiplexer()
 
-    def add_endpoint(self, ep, *, addr, dir, buffered=True):
-        if dir not in ("i", "o"):
-            raise ValueError("Endpoint direction must be 'i' or 'o', not {!r}"
-                             .format(dir))
-        if dir == "i":
+    def add_endpoint(self, ep, *, addr, buffered=False):
+        """
+        Add an endpoint to the USB device.
+
+        Parameters
+        ----------
+        ep : :class:`endpoint.InputEndpoint` or :class:`endpoint.OutputEndpoint`
+            Endpoint interface.
+        addr : int
+            Endpoint address.
+        buffered : bool
+            Endpoint buffering. Optional. If true, a double buffer is provided between the
+            the endpoint and the device controller.
+        """
+        if isinstance(ep, InputEndpoint):
             self._mux_in .add_endpoint(ep, addr=addr, buffered=buffered)
-        if dir == "o":
+        elif isinstance(ep, OutputEndpoint):
             self._mux_out.add_endpoint(ep, addr=addr, buffered=buffered)
+        else:
+            raise TypeError("Endpoint must be an InputEndpoint or an OutputEndpoint, not {!r}"
+                            .format(ep))
 
     def elaborate(self, platform):
         m = Module()

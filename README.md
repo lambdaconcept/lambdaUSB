@@ -45,8 +45,8 @@ ep1_out = usb.OutputEndpoint(xfer=usb.Transfer.BULK, max_size=512)
 3. Add endpoint interfaces to the USB device:
 
 ```python
-usb_dev.add_endpoint(ep1_in,  addr=1, dir="i")
-usb_dev.add_endpoint(ep1_out, addr=1, dir="o")
+usb_dev.add_endpoint(ep1_in,  addr=1)
+usb_dev.add_endpoint(ep1_out, addr=1)
 ```
 
 For a full example, have a look at `examples/blinker`.
@@ -73,8 +73,8 @@ from lambdausb.usb.config import ConfigurationFSM
 from config import descriptor_map, rom_init
 
 m.submodules.cfg_fsm = cfg_fsm = ConfigurationFSM(descriptor_map, rom_init)
-usb_dev.add_endpoint(cfg_fsm.ep_in,  addr=0, dir="i")
-usb_dev.add_endpoint(cfg_fsm.ep_out, addr=0, dir="o")
+usb_dev.add_endpoint(cfg_fsm.ep_in,  addr=0)
+usb_dev.add_endpoint(cfg_fsm.ep_out, addr=0)
 ```
 
 ### License

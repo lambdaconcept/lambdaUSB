@@ -52,12 +52,12 @@ class USBBlinker(Elaboratable):
         # Configuration endpoint
         from config import descriptor_map, rom_init
         m.submodules.cfg_fsm = cfg_fsm = ConfigurationFSM(descriptor_map, rom_init)
-        usb_dev.add_endpoint(cfg_fsm.ep_in,  addr=0, dir="i")
-        usb_dev.add_endpoint(cfg_fsm.ep_out, addr=0, dir="o")
+        usb_dev.add_endpoint(cfg_fsm.ep_in,  addr=0)
+        usb_dev.add_endpoint(cfg_fsm.ep_out, addr=0)
 
         # RGB blinker endpoint
         m.submodules.blinker = blinker = RgbBlinker(pins=platform.request("rgb_led", 0))
-        usb_dev.add_endpoint(blinker.ep_out, addr=1, dir="o")
+        usb_dev.add_endpoint(blinker.ep_out, addr=1)
 
         return m
 
