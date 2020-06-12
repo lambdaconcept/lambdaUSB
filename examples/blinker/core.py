@@ -41,10 +41,17 @@ class USBBlinker(Elaboratable):
     def elaborate(self, platform):
         m = Module()
 
+        m.domains += ClockDomain("sync")
+        clk100 = platform.request("clk100", 0)
+        eos = Signal()
+        m.submodules += Instance("STARTUPE2", o_EOS=eos)
+        m.submodules += Instance("BUFGCE", i_CE=eos, i_I=clk100.i, o_O=ClockSignal("sync"))
+
         # USB device
         m.submodules.ulpi_phy = ulpi_phy = ulpi.PHY(pins=platform.request("ulpi", 0))
         m.submodules.usb_dev  = usb_dev  = usb.Device()
         m.d.comb += [
+            ResetSignal("sync").eq(ulpi_phy.dev_reset),
             ulpi_phy.rx.connect(usb_dev.rx),
             usb_dev.tx.connect(ulpi_phy.tx),
         ]
@@ -52,9 +59,9 @@ class USBBlinker(Elaboratable):
         # Configuration endpoint
         from config import descriptor_map, rom_init
         m.submodules.cfg_fsm = cfg_fsm = ConfigurationFSM(descriptor_map, rom_init)
+        m.d.comb += usb_dev.addr.eq(cfg_fsm.dev_addr)
         usb_dev.add_endpoint(cfg_fsm.ep_in,  addr=0)
         usb_dev.add_endpoint(cfg_fsm.ep_out, addr=0)
-        m.d.comb += usb_dev.addr.eq(cfg_fsm.dev_addr)
 
         # RGB blinker endpoint
         m.submodules.blinker = blinker = RgbBlinker(pins=platform.request("rgb_led", 0))

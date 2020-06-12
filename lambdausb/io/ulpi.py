@@ -1,5 +1,6 @@
 from nmigen import *
 from nmigen.hdl.rec import *
+from nmigen.lib.cdc import AsyncFFSynchronizer
 
 from ..lib import stream
 
@@ -22,6 +23,8 @@ class PHY(Elaboratable):
             ("rdy",  1, DIR_FANOUT),
         ])
 
+        self.dev_reset = Signal()
+
         self.rx_depth = rx_depth
         self.tx_depth = tx_depth
         self._pins = pins
@@ -35,6 +38,9 @@ class PHY(Elaboratable):
         m.submodules.timer = timer = _Timer()
         m.submodules.splitter = splitter = _Splitter()
         m.submodules.sender = sender = _Sender()
+
+        usb_reset = Signal()
+        m.submodules.usb_reset_sync = AsyncFFSynchronizer(usb_reset, self.dev_reset, domain="sync")
 
         rx_fifo = stream.AsyncFIFO([("data", 8)], self.rx_depth, w_domain="ulpi", r_domain="sync")
         tx_fifo = stream.AsyncFIFO([("data", 8)], self.tx_depth, w_domain="sync", r_domain="ulpi")
@@ -148,8 +154,10 @@ class PHY(Elaboratable):
                 with m.If(rx_cmd.line_state == 0b00):
                     m.d.comb += timer.cnt2ms.eq(1)
                 with m.If(timer.done):
-                    # A reset was requested from the host. If the link is Full Speed, we attempt
-                    # a chirp handshake to advertise High Speed capability.
+                    # A reset condition was detected.
+                    m.d.comb += usb_reset.eq(1)
+                    # If the link is Full Speed, we attempt a chirp handshake to advertise
+                    # High Speed capability.
                     with m.If(hs_mode):
                         m.d.ulpi += hs_mode.eq(0)
                         m.next = "INIT-0"
